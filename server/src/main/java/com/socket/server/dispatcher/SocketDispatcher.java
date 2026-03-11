@@ -16,10 +16,9 @@ public class SocketDispatcher {
     private final HandlerMapping handlerMapping;
     private final JsonMessageSerializer<?> serializer;
 
-    public SocketDispatcher(JsonMessageSerializer<?> serializer) throws Exception {
+    public SocketDispatcher(HandlerMapping handlerMapping, JsonMessageSerializer<?> serializer) {
+        this.handlerMapping = handlerMapping;
         this.serializer = serializer;
-        // 서버의 컨트롤러 패키지로 하드코딩 또는 설정 주입 가능
-        this.handlerMapping = new HandlerMapping("com.socket.server.controller");
     }
 
     /**
