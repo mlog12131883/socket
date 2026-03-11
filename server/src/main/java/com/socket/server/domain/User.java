@@ -2,28 +2,25 @@ package com.socket.server.domain;
 
 import com.socket.server.domain.state.ConnectedState;
 import com.socket.server.domain.state.SessionState;
-import java.util.Objects;
+import lombok.*;
 
 /**
  * 사용자 도메인 클래스 (세션 역할 겸임)
  */
+@Getter
+@Setter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@RequiredArgsConstructor
 public class User {
+    @EqualsAndHashCode.Include
     private final String id;
     private String nickname;
-    private SessionState state;
+    private SessionState state = new ConnectedState(); // 초기 상태: 연결됨(미인증)
 
     public User(String id, String nickname) {
         this.id = id;
         this.nickname = nickname;
-        this.state = new ConnectedState(); // 초기 상태: 연결됨(미인증)
-    }
-
-    public void setState(SessionState state) {
-        this.state = state;
-    }
-
-    public SessionState getState() {
-        return state;
+        this.state = new ConnectedState(); 
     }
 
     // 의미 있는 비즈니스 로직을 통한 상태 변경 (캡슐화 원칙)
@@ -38,22 +35,5 @@ public class User {
         if (newNickname != null && !newNickname.isBlank()) {
             this.nickname = newNickname;
         }
-    }
-
-    // Getter
-    public String getId() { return id; }
-    public String getNickname() { return nickname; }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        User user = (User) o;
-        return Objects.equals(id, user.id);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(id);
     }
 }
