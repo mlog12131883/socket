@@ -31,7 +31,7 @@ public class JsonMessageSerializer<T> implements MessageSerializer<T> {
     }
 
     @Override
-    public T deserialize(byte[] bytes, Class<T> clazz) {
+    public <R> R deserialize(byte[] bytes, Class<R> clazz) {
         try {
             return objectMapper.readValue(bytes, clazz);
         } catch (IOException e) {

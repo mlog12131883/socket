@@ -59,11 +59,13 @@ public class SocketClientService {
                         byte[] payload = serializer.serialize(enterMessage);
                         
                         out.writeInt(payload.length);
+                        out.writeInt(enterMessage.getType().ordinal()); // 메시지 타입 (4 bytes)
                         out.write(payload);
                         out.flush();
 
-                        // 서버로부터의 에코 응답 수신
+                        // 서버로부터의 응답 수신
                         int length = in.readInt();
+                        int messageType = in.readInt(); // 메시지 타입 (4 bytes)
                         byte[] responsePayload = new byte[length];
                         in.readFully(responsePayload);
                         

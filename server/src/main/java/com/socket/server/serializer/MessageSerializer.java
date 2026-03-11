@@ -14,5 +14,5 @@ public interface MessageSerializer<T> {
     /**
      * 바이트 배열을 객체로 역직렬화
      */
-    T deserialize(byte[] bytes, Class<T> clazz);
+    <R> R deserialize(byte[] bytes, Class<R> clazz);
 }

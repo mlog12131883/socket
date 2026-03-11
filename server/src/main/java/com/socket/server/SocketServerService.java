@@ -31,9 +31,11 @@ public class SocketServerService {
     private boolean isRunning = false;
 
     private final JsonMessageSerializer<ChatMessage> serializer;
+    private final com.socket.server.dispatcher.SocketDispatcher dispatcher;
 
-    public SocketServerService(JsonMessageSerializer<ChatMessage> serializer) {
+    public SocketServerService(JsonMessageSerializer<ChatMessage> serializer, com.socket.server.dispatcher.SocketDispatcher dispatcher) {
         this.serializer = serializer;
+        this.dispatcher = dispatcher;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -70,20 +72,24 @@ public class SocketServerService {
                     // 1. 헤더(Payload 길이) 읽기 (4 bytes)
                     int length = in.readInt();
                     
-                    // 2. Body 데이터 읽기
+                    // 2. 헤더(메시지 타입) 읽기 (4 bytes)
+                    int messageType = in.readInt();
+
+                    // 3. Body 데이터 읽기
                     byte[] payload = new byte[length];
                     in.readFully(payload);
 
-                    // 3. JSON 역직렬화
-                    ChatMessage message = serializer.deserialize(payload, ChatMessage.class);
-                    log.info("수신한 메시지 [{}]: 타입={}, 룸={}, 보낸사람={}, 내용={}", 
-                        clientSocket.getInetAddress(), message.getType(), message.getRoomId(), message.getSenderId(), message.getContent());
+                    // 4. Dispatcher를 통한 라우팅 및 동적 실행
+                    Object response = dispatcher.dispatch(messageType, payload);
 
                     // 에코 응답
-                    byte[] responsePayload = serializer.serialize(message);
-                    out.writeInt(responsePayload.length);
-                    out.write(responsePayload);
-                    out.flush();
+                    if (response != null) {
+                        byte[] responsePayload = serializer.serialize((ChatMessage) response);
+                        out.writeInt(responsePayload.length);
+                        out.writeInt(messageType);
+                        out.write(responsePayload);
+                        out.flush();
+                    }
                 }
             } catch (java.io.EOFException e) {
                 log.info("클라이언트 연결 종료: {}", clientSocket.getInetAddress());
