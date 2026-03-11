@@ -15,41 +15,67 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class SocketServerService {
 
     private static final Logger log = LoggerFactory.getLogger(SocketServerService.class);
 
+    private static final int CORE_POOL_SIZE = 10;
+    private static final int MAX_POOL_SIZE = 50;
+    private static final int QUEUE_CAPACITY = 100;
+    private static final long KEEP_ALIVE_TIME_SECONDS = 60L;
+
     @Value("${socket.server.port:65432}")
     private int port;
 
     private ServerSocket serverSocket;
-    private final ExecutorService executorService = Executors.newCachedThreadPool();
-    private boolean isRunning = false;
+    private final ExecutorService bossExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "Boss-Acceptor"));
+    private final ThreadPoolExecutor workerExecutor;
+    private volatile boolean isRunning = false;
 
     private final JsonMessageSerializer<ChatMessage> serializer;
     private final com.socket.server.dispatcher.SocketDispatcher dispatcher;
 
-    public SocketServerService(JsonMessageSerializer<ChatMessage> serializer, com.socket.server.dispatcher.SocketDispatcher dispatcher) {
+    public SocketServerService(JsonMessageSerializer<ChatMessage> serializer, 
+                               com.socket.server.dispatcher.SocketDispatcher dispatcher) {
         this.serializer = serializer;
         this.dispatcher = dispatcher;
+        
+        // 커스텀 ThreadPoolExecutor 생성 (Worker)
+        this.workerExecutor = new ThreadPoolExecutor(
+                CORE_POOL_SIZE,
+                MAX_POOL_SIZE,
+                KEEP_ALIVE_TIME_SECONDS,
+                TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(QUEUE_CAPACITY),
+                new NamedThreadFactory("Worker-Processor"),
+                new ThreadPoolExecutor.AbortPolicy()
+        );
     }
 
     @EventListener(ApplicationReadyEvent.class)
     public void startServer() {
-        executorService.submit(() -> {
+        bossExecutor.submit(() -> {
             try {
                 serverSocket = new ServerSocket(port);
                 isRunning = true;
-                log.info("소켓 서버가 포트 {}에서 대기 중입니다...", port);
+                log.info("소켓 서버가 포트 {}에서 대기 중입니다... (WAS 방식 스레드 풀 적용)", port);
 
                 while (isRunning) {
                     try {
                         Socket clientSocket = serverSocket.accept();
-                        handleClient(clientSocket);
+                        log.info("클라이언트 접속 수락: {}", clientSocket.getInetAddress());
+                        
+                        // 실제 처리는 Worker 스레드 풀로 위임 (Non-blocking Accept)
+                        try {
+                            workerExecutor.submit(() -> handleClient(clientSocket));
+                        } catch (RejectedExecutionException e) {
+                            log.warn("작업 큐가 가득 차서 연결을 거절합니다: {}", clientSocket.getInetAddress());
+                            clientSocket.close();
+                        }
                     } catch (IOException e) {
                         if (isRunning) {
                             log.error("클라이언트 연결 수락 중 오류 발생", e);
@@ -63,59 +89,97 @@ public class SocketServerService {
     }
 
     private void handleClient(Socket clientSocket) {
-        executorService.submit(() -> {
-            log.info("클라이언트 접속: {}", clientSocket.getInetAddress());
-            try (DataInputStream in = new DataInputStream(clientSocket.getInputStream());
-                 DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream())) {
+        log.info("클라이언트 처리 시작: {}", clientSocket.getInetAddress());
+        try (DataInputStream in = new DataInputStream(clientSocket.getInputStream());
+             DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream())) {
 
-                while (true) {
-                    // 1. 헤더(Payload 길이) 읽기 (4 bytes)
-                    int length = in.readInt();
-                    
-                    // 2. 헤더(메시지 타입) 읽기 (4 bytes)
-                    int messageType = in.readInt();
+            while (isRunning) {
+                // 1. 헤더(Payload 길이) 읽기 (4 bytes)
+                int length = in.readInt();
+                
+                // 2. 헤더(메시지 타입) 읽기 (4 bytes)
+                int messageType = in.readInt();
 
-                    // 3. Body 데이터 읽기
-                    byte[] payload = new byte[length];
-                    in.readFully(payload);
+                // 3. Body 데이터 읽기
+                byte[] payload = new byte[length];
+                in.readFully(payload);
 
-                    // 4. Dispatcher를 통한 라우팅 및 동적 실행
-                    Object response = dispatcher.dispatch(messageType, payload);
+                // 4. Dispatcher를 통한 라우팅 및 동적 실행
+                Object response = dispatcher.dispatch(messageType, payload);
 
-                    // 에코 응답
-                    if (response != null) {
-                        byte[] responsePayload = serializer.serialize((ChatMessage) response);
-                        out.writeInt(responsePayload.length);
-                        out.writeInt(messageType);
-                        out.write(responsePayload);
-                        out.flush();
-                    }
-                }
-            } catch (java.io.EOFException e) {
-                log.info("클라이언트 연결 종료: {}", clientSocket.getInetAddress());
-            } catch (Exception e) {
-                log.error("클라이언트 연결 끊김 또는 통신 에러: {}", clientSocket.getInetAddress(), e);
-            } finally {
-                try {
-                    clientSocket.close();
-                } catch (IOException e) {
-                    log.warn("소켓 닫기 실패", e);
+                // 에코 응답
+                if (response != null) {
+                    byte[] responsePayload = serializer.serialize((ChatMessage) response);
+                    out.writeInt(responsePayload.length);
+                    out.writeInt(messageType);
+                    out.write(responsePayload);
+                    out.flush();
                 }
             }
-        });
+        } catch (java.io.EOFException e) {
+            log.info("클라이언트 연결 종료: {}", clientSocket.getInetAddress());
+        } catch (Exception e) {
+            if (isRunning) {
+                log.error("클라이언트 통신 에러: {}", clientSocket.getInetAddress(), e);
+            }
+        } finally {
+            try {
+                if (!clientSocket.isClosed()) {
+                    clientSocket.close();
+                }
+            } catch (IOException e) {
+                log.warn("소켓 닫기 실패", e);
+            }
+        }
     }
 
     @PreDestroy
     public void stopServer() {
+        log.info("소켓 서버를 종료합니다. (Graceful Shutdown 시작)");
         isRunning = false;
+        
         try {
             if (serverSocket != null && !serverSocket.isClosed()) {
                 serverSocket.close();
-                log.info("소켓 서버가 종료되었습니다.");
             }
         } catch (IOException e) {
-            log.error("서버 종료 중 오류 발생", e);
+            log.error("서버 소켓 종료 중 오류 발생", e);
         }
-        executorService.shutdown();
+
+        bossExecutor.shutdown();
+        workerExecutor.shutdown();
+
+        try {
+            // 잔여 작업 처리를 위한 대기
+            if (!workerExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
+                log.warn("워커 스레드 풀이 30초 내에 종료되지 않아 강제 종료합니다.");
+                workerExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            workerExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        
+        log.info("소켓 서버가 완전히 종료되었습니다.");
+    }
+
+    /**
+     * 스레드에 이름을 부여하기 위한 커스텀 스레드 팩토리
+     */
+    private static class NamedThreadFactory implements ThreadFactory {
+        private final String baseName;
+        private final AtomicInteger threadId = new AtomicInteger(1);
+
+        public NamedThreadFactory(String baseName) {
+            this.baseName = baseName;
+        }
+
+        @Override
+        public Thread newThread(Runnable r) {
+            Thread thread = new Thread(r, baseName + "-" + threadId.getAndIncrement());
+            if (thread.isDaemon()) thread.setDaemon(false);
+            if (thread.getPriority() != Thread.NORM_PRIORITY) thread.setPriority(Thread.NORM_PRIORITY);
+            return thread;
+        }
     }
 }
