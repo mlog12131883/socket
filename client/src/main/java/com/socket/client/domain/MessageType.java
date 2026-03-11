@@ -3,5 +3,6 @@ package com.socket.client.domain;
 public enum MessageType {
     ENTER,
     CHAT,
-    LEAVE
+    LEAVE,
+    USER_LIST
 }

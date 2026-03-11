@@ -76,13 +76,19 @@ public class SocketClientService {
         readerExecutor.submit(() -> {
             try {
                 while (connected) {
-                    int length = in.readInt();
-                    int typeOrdinal = in.readInt();
-                    byte[] payload = new byte[length];
-                    in.readFully(payload);
+                    try {
+                        int length = in.readInt();
+                        int typeOrdinal = in.readInt();
+                        byte[] payload = new byte[length];
+                        in.readFully(payload);
 
-                    ChatMessage message = serializer.deserialize(payload, ChatMessage.class);
-                    displayMessage(message);
+                        ChatMessage message = serializer.deserialize(payload, ChatMessage.class);
+                        displayMessage(message);
+                    } catch (IOException e) {
+                        throw e; // 재연결 로직이 없으므로 루프 종료를 위해 던짐
+                    } catch (Exception e) {
+                        log.error("메시지 수신 처리 중 오류 발생 (무시하고 계속): {}", e.getMessage());
+                    }
                 }
             } catch (IOException e) {
                 if (connected) {

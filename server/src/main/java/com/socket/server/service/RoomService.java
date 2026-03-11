@@ -100,23 +100,31 @@ public class RoomService {
      */
     public void broadcast(String roomId, ChatMessage message) {
         roomCache.findById(roomId).ifPresent(room -> {
+            log.info("[RoomService] 브로드캐스팅 시작: roomId={}, messageType={}, activeUsersCount={}", 
+                    roomId, message.getType(), room.getActiveUsers().size());
             byte[] payload = serializer.serialize(message);
             
             for (User user : room.getActiveUsers()) {
-                sessionRegistry.getOutputStream(user.getId()).ifPresent(out -> {
+                Optional<DataOutputStream> outOpt = sessionRegistry.getOutputStream(user.getId());
+                if (outOpt.isPresent()) {
+                    DataOutputStream out = outOpt.get();
+                    log.debug("[RoomService] 사용자 [{}]에게 메시지 전송 시도", user.getId());
                     broadcastExecutor.submit(() -> {
                         try {
-                            synchronized (out) { // 소켓 출력 스트림 동기화 (여러 스레드가 동일 소켓에 쓰는 경우 방계)
+                            synchronized (out) {
                                 out.writeInt(payload.length);
                                 out.writeInt(message.getType().ordinal());
                                 out.write(payload);
                                 out.flush();
                             }
+                            log.debug("[RoomService] 사용자 [{}]에게 메시지 전송 완료", user.getId());
                         } catch (Exception e) {
                             log.error("브로드캐스팅 실패: userId={}, roomId={}", user.getId(), roomId, e);
                         }
                     });
-                });
+                } else {
+                    log.warn("[RoomService] 사용자 [{}]의 출력 스트림을 찾을 수 없습니다. (SessionRegistry 확인 필요)", user.getId());
+                }
             }
         });
     }

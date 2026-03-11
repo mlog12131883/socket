@@ -36,12 +36,8 @@ public class ChatController {
         User user = new User(message.getSenderId(), message.getSenderId());
         sessionService.registerSession(message.getSenderId(), user);
         
-        // SessionRegistry에 출력 스트림 및 소켓 매칭 등록
-        try {
-            sessionRegistry.register(message.getSenderId(), clientSocket, new DataOutputStream(clientSocket.getOutputStream()));
-        } catch (IOException e) {
-            log.error("SessionRegistry 등록 실패", e);
-        }
+        // SessionRegistry에 소켓-사용자 매핑 등록 (이미 등록된 out 스트림 사용)
+        sessionRegistry.register(message.getSenderId(), clientSocket);
 
         // 2. 채팅방 조회 또는 생성
         ChatRoom room = roomService.getRoom(message.getRoomId())

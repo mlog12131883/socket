@@ -95,6 +95,9 @@ public class SocketServerService {
         try (DataInputStream in = new DataInputStream(clientSocket.getInputStream());
              DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream())) {
 
+            // SessionRegistry에 소켓과 출력 스트림 등록 (동일 인스턴스 공유 보장)
+            sessionRegistry.addSocket(clientSocket, out);
+
             // 연결 지속성 설정
             clientSocket.setKeepAlive(true); // TCP Keep-Alive 활성화
             clientSocket.setSoTimeout(0);    // 타임아웃 무제한 설정
@@ -118,10 +121,12 @@ public class SocketServerService {
                     if (response != null) {
                         byte[] responsePayload = serializer.serialize((ChatMessage) response);
                         
-                        out.writeInt(responsePayload.length);
-                        out.writeInt(messageType);
-                        out.write(responsePayload);
-                        out.flush();
+                        synchronized (out) {
+                            out.writeInt(responsePayload.length);
+                            out.writeInt(messageType);
+                            out.write(responsePayload);
+                            out.flush();
+                        }
                     }
                 } catch (java.io.EOFException | java.net.SocketException e) {
                     // 연결 끊김 관련 예외는 외부로 던져 finally에서 정리하도록 함
