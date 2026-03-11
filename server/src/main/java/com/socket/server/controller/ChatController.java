@@ -41,6 +41,10 @@ public class ChatController {
         // 3. 채팅방 입장
         roomService.joinRoom(message.getRoomId(), user);
 
+        // 4. 상태 전이 (Connected -> Authenticated)
+        user.setState(new com.socket.server.domain.state.AuthenticatedState());
+        log.info("[ChatController] 사용자 [{}] 상태 변경: {}", user.getId(), user.getState().getStateName());
+
         message.setContent(message.getSenderId() + "님이 " + message.getRoomId() + " 방에 입장했습니다. (현재 접속자: " + room.getActiveUsers().size() + "명)");
         return message; // 에코 응답용
     }

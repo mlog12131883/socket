@@ -17,6 +17,8 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import com.socket.server.event.EventBus;
+import com.socket.server.event.SessionClosedEvent;
 
 @Service
 public class SocketServerService {
@@ -104,12 +106,17 @@ public class SocketServerService {
                 byte[] payload = new byte[length];
                 in.readFully(payload);
 
-                // 4. Dispatcher를 통한 라우팅 및 동적 실행
-                Object response = dispatcher.dispatch(messageType, payload);
+                // 4. Dispatcher를 통한 라우팅 및 동적 실행 (Socket 전달)
+                Object response = dispatcher.dispatch(clientSocket, messageType, payload);
 
                 // 에코 응답
                 if (response != null) {
                     byte[] responsePayload = serializer.serialize((ChatMessage) response);
+                    
+                    // 이벤트 발행을 위한 userId 추출(간이 방식: ChatMessage에서 추출)
+                    // 실제로는 세션 관리자에서 소켓-유저 매핑 정보를 관리하는 것이 좋음
+                    String currentUserId = ((ChatMessage) response).getSenderId();
+
                     out.writeInt(responsePayload.length);
                     out.writeInt(messageType);
                     out.write(responsePayload);
@@ -123,6 +130,10 @@ public class SocketServerService {
                 log.error("클라이언트 통신 에러: {}", clientSocket.getInetAddress(), e);
             }
         } finally {
+            // Observer 패턴: 연결 종료 이벤트 발행
+            // 여기서는 단순화하여 닉네임 대신 IP를 ID로 임시 사용하거나, 세션 정보가 있다면 유저 ID 사용
+            EventBus.getInstance().publish(new SessionClosedEvent(clientSocket.getInetAddress().toString()));
+            
             try {
                 if (!clientSocket.isClosed()) {
                     clientSocket.close();

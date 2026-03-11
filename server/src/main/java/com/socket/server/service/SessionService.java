@@ -20,6 +20,20 @@ public class SessionService {
 
     public SessionService(@Qualifier("sessionCache") CacheRepository<String, User> sessionCache) {
         this.sessionCache = sessionCache;
+        
+        // Observer 패턴: 연결 종료 이벤트 구독
+        com.socket.server.event.EventBus.getInstance().subscribe(event -> {
+            if (event instanceof com.socket.server.event.SessionClosedEvent) {
+                handleSessionClosed((com.socket.server.event.SessionClosedEvent) event);
+            }
+        });
+    }
+
+    private void handleSessionClosed(com.socket.server.event.SessionClosedEvent event) {
+        log.info("[SessionService] 연결 종료 이벤트 수신: {}", event.getUserId());
+        // 세션 아이디가 유저 아이디와 동일하다고 가정하거나, 
+        // 맵핑 정보를 찾아 세션 제거
+        removeSession(event.getUserId());
     }
 
     /**
