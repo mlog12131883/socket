@@ -1,5 +1,7 @@
 package com.socket.server;
 
+import com.socket.server.domain.ChatMessage;
+import com.socket.server.serializer.JsonMessageSerializer;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,10 +10,9 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.ExecutorService;
@@ -28,6 +29,12 @@ public class SocketServerService {
     private ServerSocket serverSocket;
     private final ExecutorService executorService = Executors.newCachedThreadPool();
     private boolean isRunning = false;
+
+    private final JsonMessageSerializer<ChatMessage> serializer;
+
+    public SocketServerService(JsonMessageSerializer<ChatMessage> serializer) {
+        this.serializer = serializer;
+    }
 
     @EventListener(ApplicationReadyEvent.class)
     public void startServer() {
@@ -56,21 +63,35 @@ public class SocketServerService {
     private void handleClient(Socket clientSocket) {
         executorService.submit(() -> {
             log.info("클라이언트 접속: {}", clientSocket.getInetAddress());
-            try (PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
-                 BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()))) {
+            try (DataInputStream in = new DataInputStream(clientSocket.getInputStream());
+                 DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream())) {
 
-                String inputLine;
-                while ((inputLine = in.readLine()) != null) {
-                    log.info("수신한 데이터 [{}]: {}", clientSocket.getInetAddress(), inputLine);
-                    // 클라이언트로 Echo 응답
-                    out.println("서버 응답: " + inputLine);
+                while (true) {
+                    // 1. 헤더(Payload 길이) 읽기 (4 bytes)
+                    int length = in.readInt();
+                    
+                    // 2. Body 데이터 읽기
+                    byte[] payload = new byte[length];
+                    in.readFully(payload);
+
+                    // 3. JSON 역직렬화
+                    ChatMessage message = serializer.deserialize(payload, ChatMessage.class);
+                    log.info("수신한 메시지 [{}]: 타입={}, 룸={}, 보낸사람={}, 내용={}", 
+                        clientSocket.getInetAddress(), message.getType(), message.getRoomId(), message.getSenderId(), message.getContent());
+
+                    // 에코 응답
+                    byte[] responsePayload = serializer.serialize(message);
+                    out.writeInt(responsePayload.length);
+                    out.write(responsePayload);
+                    out.flush();
                 }
-            } catch (IOException e) {
-                log.error("클라이언트 통신 에러: {}", clientSocket.getInetAddress(), e);
+            } catch (java.io.EOFException e) {
+                log.info("클라이언트 연결 종료: {}", clientSocket.getInetAddress());
+            } catch (Exception e) {
+                log.error("클라이언트 연결 끊김 또는 통신 에러: {}", clientSocket.getInetAddress(), e);
             } finally {
                 try {
                     clientSocket.close();
-                    log.info("클라이언트 연결 종료: {}", clientSocket.getInetAddress());
                 } catch (IOException e) {
                     log.warn("소켓 닫기 실패", e);
                 }
