@@ -37,7 +37,7 @@ public class HandlerMapping {
                 for (Method method : clazz.getDeclaredMethods()) {
                     if (method.isAnnotationPresent(MessageMapping.class)) {
                         MessageMapping mapping = method.getAnnotation(MessageMapping.class);
-                        int messageType = mapping.value();
+                        int messageType = mapping.value().ordinal();
                         
                         HandlerMethod handlerMethod = new HandlerMethod(instance, method);
                         handlerMap.put(messageType, handlerMethod);
