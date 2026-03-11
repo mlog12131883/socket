@@ -29,7 +29,7 @@ public class ChatController {
     private final SessionRegistry sessionRegistry;
 
     @MessageMapping(MessageType.ENTER)
-    public ChatMessage handleEnter(@MessageBody ChatMessage message, Socket clientSocket) {
+    public void handleEnter(@MessageBody ChatMessage message, Socket clientSocket) {
         log.info("[ChatController] 입장 메시지 처리: 방 [{}], 사용자 [{}]", message.getRoomId(), message.getSenderId());
         
         // 1. 사용자 객체 생성 및 세션 등록
@@ -53,23 +53,19 @@ public class ChatController {
         // 5. 브로드캐스팅: 입장 알림 및 유저 목록
         message.setContent(message.getSenderId() + "님이 입장했습니다.");
         roomService.broadcast(message.getRoomId(), message);
-
-        return message; 
     }
 
     @MessageMapping(MessageType.CHAT)
-    public ChatMessage handleChat(@MessageBody ChatMessage message) {
+    public void handleChat(@MessageBody ChatMessage message) {
         log.info("[ChatController] 일반 채팅 메시지 처리: 방 [{}], 사용자 [{}], 내용 [{}]", 
                 message.getRoomId(), message.getSenderId(), message.getContent());
         
         // 브로드캐스팅: 전체 메시지 전파
         roomService.broadcast(message.getRoomId(), message);
-        
-        return message;
     }
 
     @MessageMapping(MessageType.LEAVE)
-    public ChatMessage handleLeave(@MessageBody ChatMessage message) {
+    public void handleLeave(@MessageBody ChatMessage message) {
         log.info("[ChatController] 퇴장 메시지 처리: 방 [{}], 사용자 [{}]", message.getRoomId(), message.getSenderId());
         
         sessionService.getSession(message.getSenderId()).ifPresent(user -> {
@@ -80,7 +76,5 @@ public class ChatController {
 
         message.setContent(message.getSenderId() + "님이 퇴장했습니다.");
         roomService.broadcast(message.getRoomId(), message);
-
-        return message;
     }
 }
