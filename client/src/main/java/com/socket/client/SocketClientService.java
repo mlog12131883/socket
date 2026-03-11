@@ -32,6 +32,9 @@ public class SocketClientService {
     @Value("${socket.server.port:65432}")
     private int port;
 
+    @Value("${chat.user.id}")
+    private String userId;
+
     private final JsonMessageSerializer<ChatMessage> serializer;
     private final ExecutorService readerExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "MessageReader"));
     private final ExecutorService inputExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "ConsoleInput"));
@@ -48,7 +51,7 @@ public class SocketClientService {
 
     private void connect() {
         try {
-            log.info("소켓 서버({}:{})에 연결 시도 중...", host, port);
+            log.info("소켓 서버({}:{})에 연결 시도 중... (내 ID: {})", host, port, userId);
             socket = new Socket(host, port);
             out = new DataOutputStream(socket.getOutputStream());
             in = new DataInputStream(socket.getInputStream());
@@ -66,7 +69,6 @@ public class SocketClientService {
 
         } catch (IOException e) {
             log.error("서버 연결 실패: {}", e.getMessage());
-            // 재시도 로직은 단순화하여 생략하거나 나중에 보강
         }
     }
 
@@ -95,7 +97,7 @@ public class SocketClientService {
         inputExecutor.submit(() -> {
             java.util.Scanner scanner = new java.util.Scanner(System.in);
             System.out.println("========================================");
-            System.out.println("채팅 클라이언트에 오신 것을 환영합니다!");
+            System.out.println("채팅 클라이언트 (ID: " + userId + ")");
             System.out.println("메시지를 입력하고 엔터를 누르세요. (종료: /quit)");
             System.out.println("========================================");
 
@@ -107,14 +109,14 @@ public class SocketClientService {
                 }
                 
                 if (!input.trim().isEmpty()) {
-                    sendMessage(new ChatMessage(MessageType.CHAT, "ROOM_1", "User1", input));
+                    sendMessage(new ChatMessage(MessageType.CHAT, "ROOM_1", userId, input));
                 }
             }
         });
     }
 
     private void sendInitialEnterMessage() {
-        sendMessage(new ChatMessage(MessageType.ENTER, "ROOM_1", "User1", "User1님이 입장했습니다."));
+        sendMessage(new ChatMessage(MessageType.ENTER, "ROOM_1", userId, userId + "님이 입장했습니다."));
     }
 
     private void sendMessage(ChatMessage message) {
@@ -139,7 +141,7 @@ public class SocketClientService {
     private void disconnect() {
         connected = false;
         try {
-            sendMessage(new ChatMessage(MessageType.LEAVE, "ROOM_1", "User1", "퇴장합니다."));
+            sendMessage(new ChatMessage(MessageType.LEAVE, "ROOM_1", userId, "퇴장합니다."));
             if (socket != null) socket.close();
             log.info("연결을 종료했습니다.");
             System.exit(0);
