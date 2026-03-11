@@ -1,26 +1,31 @@
 package com.socket.server.service;
 
 import com.socket.server.domain.User;
-import com.socket.server.repository.CacheRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 
 /**
- * 소켓 세션 관리 서비스 (L1 캐시 활용)
+ * 소켓 세션 관리 서비스 (Spring Cache 추상화 + Self-Injection 활용)
  */
 @Service
 @RequiredArgsConstructor
 public class SessionService {
     private static final Logger log = LoggerFactory.getLogger(SessionService.class);
 
-    @Qualifier("sessionCache")
-    private final CacheRepository<String, User> sessionCache;
+    private final ObjectProvider<SessionService> selfProvider;
+
+    private SessionService getSelf() {
+        return selfProvider.getIfAvailable();
+    }
 
     @PostConstruct
     public void init() {
@@ -34,34 +39,35 @@ public class SessionService {
 
     private void handleSessionClosed(com.socket.server.event.SessionClosedEvent event) {
         log.info("[SessionService] 연결 종료 이벤트 수신: {}", event.getUserId());
-        // 세션 아이디가 유저 아이디와 동일하다고 가정하거나, 
-        // 맵핑 정보를 찾아 세션 제거
-        removeSession(event.getUserId());
+        getSelf().removeSession(event.getUserId());
     }
 
     /**
      * 사용자 세션 등록
      */
-    public void registerSession(String sessionId, User user) {
+    @CachePut(value = "sessions", key = "#sessionId")
+    public User registerSession(String sessionId, User user) {
         log.info("Registering session: sessionId={}, userId={}", sessionId, user.getId());
-        sessionCache.save(sessionId, user);
+        return user;
     }
 
     /**
      * 세션 정보 조회
      */
+    @Cacheable(value = "sessions", key = "#sessionId")
     public Optional<User> getSession(String sessionId) {
-        return sessionCache.findById(sessionId);
+        log.debug("Cache miss for session: {}", sessionId);
+        return Optional.empty();
     }
 
     /**
      * 세션 제거 및 연결 종료 처리
      */
+    @CacheEvict(value = "sessions", key = "#sessionId")
     public void removeSession(String sessionId) {
-        sessionCache.findById(sessionId).ifPresent(user -> {
-            log.info("Removing session: sessionId={}, userId={}", sessionId, user.getId());
+        getSelf().getSession(sessionId).ifPresent(user -> {
+            log.info("Removing session and disconnecting user: sessionId={}, userId={}", sessionId, user.getId());
             user.disconnect();
-            sessionCache.deleteById(sessionId);
         });
     }
 
@@ -69,6 +75,6 @@ public class SessionService {
      * 세션 존재 여부 확인
      */
     public boolean isSessionActive(String sessionId) {
-        return sessionCache.existsById(sessionId);
+        return getSelf().getSession(sessionId).isPresent();
     }
 }

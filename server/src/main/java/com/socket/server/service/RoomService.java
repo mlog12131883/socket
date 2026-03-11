@@ -3,37 +3,39 @@ package com.socket.server.service;
 import com.socket.server.domain.ChatMessage;
 import com.socket.server.domain.ChatRoom;
 import com.socket.server.domain.User;
-import com.socket.server.repository.CacheRepository;
 import com.socket.server.repository.SessionRegistry;
 import com.socket.server.serializer.JsonMessageSerializer;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.io.DataOutputStream;
-import java.io.IOException;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
- * 채팅방 관리 서비스 (L1 캐시 활용)
+ * 채팅방 관리 서비스 (Spring Cache 추상화 + Self-Injection 활용)
  */
 @Service
 @RequiredArgsConstructor
 public class RoomService {
     private static final Logger log = LoggerFactory.getLogger(RoomService.class);
 
-    @Qualifier("roomCache")
-    private final CacheRepository<String, ChatRoom> roomCache;
     private final SessionRegistry sessionRegistry;
     private final JsonMessageSerializer<ChatMessage> serializer;
-    private final ExecutorService broadcastExecutor = Executors.newFixedThreadPool(10); // 브로드캐스팅 전용 스레드 풀
+    private final ObjectProvider<RoomService> selfProvider;
+    private final ExecutorService broadcastExecutor = Executors.newFixedThreadPool(10);
+
+    private RoomService getSelf() {
+        return selfProvider.getIfAvailable();
+    }
 
     @PostConstruct
     public void init() {
@@ -47,16 +49,14 @@ public class RoomService {
 
     private void handleSessionClosed(com.socket.server.event.SessionClosedEvent event) {
         log.info("[RoomService] 연결 종료 이벤트 수신: {}", event.getUserId());
-        // 모든 방에서 해당 유저 퇴장 처리 (실제로는 유저가 속한 방 목록을 관리하면 더 효율적)
-        // 여기서는 단순화하여 로그만 남기거나 전체 탐색
     }
 
     /**
      * 채팅방 생성 및 캐시 저장
      */
+    @CachePut(value = "rooms", key = "#roomId")
     public ChatRoom createRoom(String roomId, String roomName) {
         ChatRoom room = new ChatRoom(roomId, roomName);
-        roomCache.save(roomId, room);
         log.info("Created chat room: id={}, name={}", roomId, roomName);
         return room;
     }
@@ -64,42 +64,53 @@ public class RoomService {
     /**
      * 채팅방 정보 조회 (캐시 히트 우선)
      */
+    @Cacheable(value = "rooms", key = "#roomId")
     public Optional<ChatRoom> getRoom(String roomId) {
-        return roomCache.findById(roomId);
+        log.debug("Cache miss for room: {}", roomId);
+        return Optional.empty();
     }
 
     /**
      * 채팅방 입장 처리
      */
-    public void joinRoom(String roomId, User user) {
-        roomCache.findById(roomId).ifPresentOrElse(
-                room -> {
-                    room.enter(user);
-                    roomCache.save(roomId, room); // 변경사항 저장 추가
-                    log.info("User [{}] joined room [{}]", user.getId(), roomId);
-                    broadcastUserList(roomId); // 유저 목록 브로드캐스팅 추가
-                },
-                () -> log.warn("Room not found: {}", roomId)
-        );
+    @CachePut(value = "rooms", key = "#roomId")
+    public ChatRoom joinRoom(String roomId, User user) {
+        return getSelf().getRoom(roomId).map(room -> {
+            room.enter(user);
+            log.info("User [{}] joined room [{}]", user.getId(), roomId);
+            getSelf().broadcastUserList(roomId);
+            return room;
+        }).orElseGet(() -> {
+            log.warn("Room not found for join: {}", roomId);
+            return null;
+        });
     }
 
     /**
      * 채팅방 퇴장 처리
      */
-    public void leaveRoom(String roomId, User user) {
-        roomCache.findById(roomId).ifPresent(room -> {
+    @CachePut(value = "rooms", key = "#roomId")
+    public ChatRoom leaveRoom(String roomId, User user) {
+        return getSelf().getRoom(roomId).map(room -> {
             room.leave(user);
-            roomCache.save(roomId, room); // 변경사항 저장 추가
             log.info("User [{}] left room [{}]", user.getId(), roomId);
-            broadcastUserList(roomId); // 유저 목록 브로드캐스팅 추가
-        });
+            getSelf().broadcastUserList(roomId);
+            return room;
+        }).orElse(null);
+    }
+
+    /**
+     * 채팅방 존재 여부 확인
+     */
+    public boolean existsRoom(String roomId) {
+        return getSelf().getRoom(roomId).isPresent();
     }
 
     /**
      * 방에 참여 중인 모든 유저에게 메시지 브로드캐스팅 (비동기 처리)
      */
     public void broadcast(String roomId, ChatMessage message) {
-        roomCache.findById(roomId).ifPresent(room -> {
+        getSelf().getRoom(roomId).ifPresent(room -> {
             log.info("[RoomService] 브로드캐스팅 시작: roomId={}, messageType={}, activeUsersCount={}", 
                     roomId, message.getType(), room.getActiveUsers().size());
             byte[] payload = serializer.serialize(message);
@@ -108,7 +119,6 @@ public class RoomService {
                 Optional<DataOutputStream> outOpt = sessionRegistry.getOutputStream(user.getId());
                 if (outOpt.isPresent()) {
                     DataOutputStream out = outOpt.get();
-                    log.debug("[RoomService] 사용자 [{}]에게 메시지 전송 시도", user.getId());
                     broadcastExecutor.submit(() -> {
                         try {
                             synchronized (out) {
@@ -117,30 +127,20 @@ public class RoomService {
                                 out.write(payload);
                                 out.flush();
                             }
-                            log.debug("[RoomService] 사용자 [{}]에게 메시지 전송 완료", user.getId());
                         } catch (Exception e) {
                             log.error("브로드캐스팅 실패: userId={}, roomId={}", user.getId(), roomId, e);
                         }
                     });
-                } else {
-                    log.warn("[RoomService] 사용자 [{}]의 출력 스트림을 찾을 수 없습니다. (SessionRegistry 확인 필요)", user.getId());
                 }
             }
         });
     }
 
     /**
-     * 채팅방 존재 여부 확인
-     */
-    public boolean existsRoom(String roomId) {
-        return roomCache.existsById(roomId);
-    }
-
-    /**
      * 현재 채팅방의 유저 목록을 모든 참여자에게 전송
      */
-    private void broadcastUserList(String roomId) {
-        roomCache.findById(roomId).ifPresent(room -> {
+    public void broadcastUserList(String roomId) {
+        getSelf().getRoom(roomId).ifPresent(room -> {
             String userList = room.getActiveUsers().stream()
                     .map(User::getId)
                     .collect(Collectors.joining(","));
@@ -152,7 +152,7 @@ public class RoomService {
                 userList
             );
             
-            broadcast(roomId, listMessage);
+            getSelf().broadcast(roomId, listMessage);
         });
     }
 }
