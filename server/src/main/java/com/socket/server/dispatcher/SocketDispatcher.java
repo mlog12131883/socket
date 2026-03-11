@@ -56,7 +56,7 @@ public class SocketDispatcher {
         
         try {
             // 매개변수 분석 및 바인딩
-            Object[] args = resolveArguments(method, payload);
+            Object[] args = resolveArguments(method, clientSocket, payload);
             
             log.info("디스패처: 메서드 [{}] 실행 시작", method.getName());
             // 동적 메서드 호출
@@ -75,7 +75,7 @@ public class SocketDispatcher {
         }
     }
 
-    private Object[] resolveArguments(Method method, byte[] payload) throws Exception {
+    private Object[] resolveArguments(Method method, Socket clientSocket, byte[] payload) throws Exception {
         Parameter[] parameters = method.getParameters();
         Object[] args = new Object[parameters.length];
         
@@ -87,6 +87,9 @@ public class SocketDispatcher {
                 Class<?> targetType = parameter.getType();
                 // 직렬화기를 이용해 페이로드를 대상 클래스 타입으로 변환
                 args[i] = serializer.deserialize(payload, targetType);
+            } else if (parameter.getType().equals(Socket.class)) {
+                // Socket 타입인 경우 현재 클라이언트 소켓 주입
+                args[i] = clientSocket;
             } else {
                 // 어노테이션이 없는 경우 기본적으로 null 처리 (또는 다른 확장 가능)
                 args[i] = null;

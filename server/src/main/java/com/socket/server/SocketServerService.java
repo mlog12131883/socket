@@ -19,6 +19,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import com.socket.server.event.EventBus;
 import com.socket.server.event.SessionClosedEvent;
+import com.socket.server.repository.SessionRegistry;
 
 @Service
 public class SocketServerService {
@@ -40,11 +41,14 @@ public class SocketServerService {
 
     private final JsonMessageSerializer<ChatMessage> serializer;
     private final com.socket.server.dispatcher.SocketDispatcher dispatcher;
+    private final SessionRegistry sessionRegistry;
 
     public SocketServerService(JsonMessageSerializer<ChatMessage> serializer, 
-                               com.socket.server.dispatcher.SocketDispatcher dispatcher) {
+                               com.socket.server.dispatcher.SocketDispatcher dispatcher,
+                               SessionRegistry sessionRegistry) {
         this.serializer = serializer;
         this.dispatcher = dispatcher;
+        this.sessionRegistry = sessionRegistry;
         
         // 커스텀 ThreadPoolExecutor 생성 (Worker)
         this.workerExecutor = new ThreadPoolExecutor(
@@ -130,9 +134,14 @@ public class SocketServerService {
                 log.error("클라이언트 통신 에러: {}", clientSocket.getInetAddress(), e);
             }
         } finally {
+            // SessionRegistry를 통해 userId 식별
+            String userId = sessionRegistry.getUserId(clientSocket).orElse(clientSocket.getInetAddress().toString());
+            
             // Observer 패턴: 연결 종료 이벤트 발행
-            // 여기서는 단순화하여 닉네임 대신 IP를 ID로 임시 사용하거나, 세션 정보가 있다면 유저 ID 사용
-            EventBus.getInstance().publish(new SessionClosedEvent(clientSocket.getInetAddress().toString()));
+            EventBus.getInstance().publish(new SessionClosedEvent(userId));
+            
+            // 세션 등록 정보 제거
+            sessionRegistry.unregisterBySocket(clientSocket);
             
             try {
                 if (!clientSocket.isClosed()) {
