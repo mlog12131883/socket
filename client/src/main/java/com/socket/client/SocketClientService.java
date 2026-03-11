@@ -14,8 +14,10 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.time.format.DateTimeFormatter;
 
 @Service
 public class SocketClientService {
@@ -28,65 +30,123 @@ public class SocketClientService {
     @Value("${socket.server.port:65432}")
     private int port;
 
-    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private final JsonMessageSerializer<ChatMessage> serializer;
+    private final ExecutorService readerExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "MessageReader"));
+    private final ExecutorService inputExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "ConsoleInput"));
+    
+    private Socket socket;
+    private DataOutputStream out;
+    private DataInputStream in;
+    private volatile boolean connected = false;
 
     public SocketClientService(JsonMessageSerializer<ChatMessage> serializer) {
         this.serializer = serializer;
     }
 
     @EventListener(ApplicationReadyEvent.class)
-    public void connectToServer() {
-        executorService.submit(() -> {
-            boolean connected = false;
-            int maxRetries = 5;
-            int retries = 0;
+    public void startClient() {
+        connect();
+    }
 
-            // 서버가 뜰 때까지 주기적으로 재시도
-            while (!connected && retries < maxRetries) {
-                try {
-                    log.info("소켓 서버({}:{})에 연결 시도 중... (시도 횟수: {}/{})", host, port, retries + 1, maxRetries);
-                    try (Socket socket = new Socket(host, port);
-                         DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-                         DataInputStream in = new DataInputStream(socket.getInputStream())) {
+    private void connect() {
+        try {
+            log.info("소켓 서버({}:{})에 연결 시도 중...", host, port);
+            socket = new Socket(host, port);
+            out = new DataOutputStream(socket.getOutputStream());
+            in = new DataInputStream(socket.getInputStream());
+            connected = true;
+            log.info("서버에 성공적으로 연결되었습니다!");
 
-                        connected = true;
-                        log.info("서버에 성공적으로 연결되었습니다!");
+            // 1. 서버 메시지 수신 스레드 시작
+            startMessageReader();
 
-                        // 서버로 메시지 객체 전송
-                        log.info("서버로 메시지 전송 중...");
-                        ChatMessage enterMessage = new ChatMessage(MessageType.ENTER, "ROOM_1", "User1", "안녕하세요! 클라이언트 입장입니다.");
-                        byte[] payload = serializer.serialize(enterMessage);
-                        
-                        out.writeInt(payload.length);
-                        out.writeInt(enterMessage.getType().ordinal()); // 메시지 타입 (4 bytes)
-                        out.write(payload);
-                        out.flush();
+            // 2. 초기 입장 메시지 전송
+            sendInitialEnterMessage();
 
-                        // 서버로부터의 응답 수신
-                        int length = in.readInt();
-                        int messageType = in.readInt(); // 메시지 타입 (4 bytes)
-                        byte[] responsePayload = new byte[length];
-                        in.readFully(responsePayload);
-                        
-                        ChatMessage responseMessage = serializer.deserialize(responsePayload, ChatMessage.class);
-                        log.info("서버로부터 받은 응답: [타입={}] {}", responseMessage.getType(), responseMessage.getContent());
+            // 3. 사용자 입력 대기 루프 시작
+            startConsoleInputLoop();
 
-                    }
-                } catch (IOException e) {
-                    retries++;
-                    log.warn("서버 연결 실패. 3초 후 재시도합니다... ({} / {})", retries, maxRetries);
-                    try {
-                        Thread.sleep(3000); // 3초 대기
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                    }
+        } catch (IOException e) {
+            log.error("서버 연결 실패: {}", e.getMessage());
+            // 재시도 로직은 단순화하여 생략하거나 나중에 보강
+        }
+    }
+
+    private void startMessageReader() {
+        readerExecutor.submit(() -> {
+            try {
+                while (connected) {
+                    int length = in.readInt();
+                    int typeOrdinal = in.readInt();
+                    byte[] payload = new byte[length];
+                    in.readFully(payload);
+
+                    ChatMessage message = serializer.deserialize(payload, ChatMessage.class);
+                    displayMessage(message);
+                }
+            } catch (IOException e) {
+                if (connected) {
+                    log.error("서버와 연결이 끊어졌습니다: {}", e.getMessage());
+                    connected = false;
                 }
             }
+        });
+    }
 
-            if (!connected) {
-                log.error("소켓 서버 연결에 최종 실패했습니다. (최대 재시도 횟수 초과)");
+    private void startConsoleInputLoop() {
+        inputExecutor.submit(() -> {
+            java.util.Scanner scanner = new java.util.Scanner(System.in);
+            System.out.println("========================================");
+            System.out.println("채팅 클라이언트에 오신 것을 환영합니다!");
+            System.out.println("메시지를 입력하고 엔터를 누르세요. (종료: /quit)");
+            System.out.println("========================================");
+
+            while (connected) {
+                String input = scanner.nextLine();
+                if ("/quit".equalsIgnoreCase(input)) {
+                    disconnect();
+                    break;
+                }
+                
+                if (!input.trim().isEmpty()) {
+                    sendMessage(new ChatMessage(MessageType.CHAT, "ROOM_1", "User1", input));
+                }
             }
         });
+    }
+
+    private void sendInitialEnterMessage() {
+        sendMessage(new ChatMessage(MessageType.ENTER, "ROOM_1", "User1", "User1님이 입장했습니다."));
+    }
+
+    private void sendMessage(ChatMessage message) {
+        try {
+            byte[] payload = serializer.serialize(message);
+            synchronized (out) {
+                out.writeInt(payload.length);
+                out.writeInt(message.getType().ordinal());
+                out.write(payload);
+                out.flush();
+            }
+        } catch (IOException e) {
+            log.error("메시지 전송 실패: {}", e.getMessage());
+        }
+    }
+
+    private void displayMessage(ChatMessage message) {
+        String time = message.getTimestamp().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+        System.out.printf("[%s] %s: %s\n", time, message.getSenderId(), message.getContent());
+    }
+
+    private void disconnect() {
+        connected = false;
+        try {
+            sendMessage(new ChatMessage(MessageType.LEAVE, "ROOM_1", "User1", "퇴장합니다."));
+            if (socket != null) socket.close();
+            log.info("연결을 종료했습니다.");
+            System.exit(0);
+        } catch (IOException e) {
+            log.error("종료 중 에러 발생: {}", e.getMessage());
+        }
     }
 }

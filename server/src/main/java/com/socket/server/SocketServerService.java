@@ -99,39 +99,47 @@ public class SocketServerService {
         try (DataInputStream in = new DataInputStream(clientSocket.getInputStream());
              DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream())) {
 
+            // 연결 지속성 설정
+            clientSocket.setKeepAlive(true); // TCP Keep-Alive 활성화
+            clientSocket.setSoTimeout(0);    // 타임아웃 무제한 설정
+
             while (isRunning) {
-                // 1. 헤더(Payload 길이) 읽기 (4 bytes)
-                int length = in.readInt();
-                
-                // 2. 헤더(메시지 타입) 읽기 (4 bytes)
-                int messageType = in.readInt();
-
-                // 3. Body 데이터 읽기
-                byte[] payload = new byte[length];
-                in.readFully(payload);
-
-                // 4. Dispatcher를 통한 라우팅 및 동적 실행 (Socket 전달)
-                Object response = dispatcher.dispatch(clientSocket, messageType, payload);
-
-                // 에코 응답
-                if (response != null) {
-                    byte[] responsePayload = serializer.serialize((ChatMessage) response);
+                try {
+                    // 1. 헤더(Payload 길이) 읽기 (4 bytes)
+                    int length = in.readInt();
                     
-                    // 이벤트 발행을 위한 userId 추출(간이 방식: ChatMessage에서 추출)
-                    // 실제로는 세션 관리자에서 소켓-유저 매핑 정보를 관리하는 것이 좋음
-                    String currentUserId = ((ChatMessage) response).getSenderId();
+                    // 2. 헤더(메시지 타입) 읽기 (4 bytes)
+                    int messageType = in.readInt();
 
-                    out.writeInt(responsePayload.length);
-                    out.writeInt(messageType);
-                    out.write(responsePayload);
-                    out.flush();
+                    // 3. Body 데이터 읽기
+                    byte[] payload = new byte[length];
+                    in.readFully(payload);
+
+                    // 4. Dispatcher를 통한 라우팅 및 동적 실행 (Socket 전달)
+                    Object response = dispatcher.dispatch(clientSocket, messageType, payload);
+
+                    // 에코 응답
+                    if (response != null) {
+                        byte[] responsePayload = serializer.serialize((ChatMessage) response);
+                        
+                        out.writeInt(responsePayload.length);
+                        out.writeInt(messageType);
+                        out.write(responsePayload);
+                        out.flush();
+                    }
+                } catch (java.io.EOFException | java.net.SocketException e) {
+                    // 연결 끊김 관련 예외는 외부로 던져 finally에서 정리하도록 함
+                    throw e;
+                } catch (Exception e) {
+                    // 개별 메시지 처리 중 발생하는 비즈니스 로직 에러는 로그만 남기고 연결 유지
+                    log.error("메시지 처리 중 에러 발생 (연결 상태 유지): {}", clientSocket.getInetAddress(), e);
                 }
             }
-        } catch (java.io.EOFException e) {
-            log.info("클라이언트 연결 종료: {}", clientSocket.getInetAddress());
+        } catch (java.io.EOFException | java.net.SocketException e) {
+            log.info("클라이언트 연결 종료 또는 초기화: {}", clientSocket.getInetAddress());
         } catch (Exception e) {
             if (isRunning) {
-                log.error("클라이언트 통신 에러: {}", clientSocket.getInetAddress(), e);
+                log.error("클라이언트 통신 에너 (세션 종료): {}", clientSocket.getInetAddress(), e);
             }
         } finally {
             // SessionRegistry를 통해 userId 식별
