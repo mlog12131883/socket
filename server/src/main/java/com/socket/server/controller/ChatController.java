@@ -10,6 +10,7 @@ import com.socket.server.domain.ChatRoom;
 import com.socket.server.repository.SessionRegistry;
 import com.socket.server.service.SessionService;
 import com.socket.server.service.RoomService;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,6 +19,7 @@ import java.io.IOException;
 import java.net.Socket;
 
 @SocketController
+@RequiredArgsConstructor
 public class ChatController {
 
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
@@ -25,14 +27,6 @@ public class ChatController {
     private final SessionService sessionService;
     private final RoomService roomService;
     private final SessionRegistry sessionRegistry;
-
-    public ChatController(SessionService sessionService, 
-                          RoomService roomService,
-                          SessionRegistry sessionRegistry) {
-        this.sessionService = sessionService;
-        this.roomService = roomService;
-        this.sessionRegistry = sessionRegistry;
-    }
 
     @MessageMapping(MessageType.ENTER)
     public ChatMessage handleEnter(@MessageBody ChatMessage message, Socket clientSocket) {

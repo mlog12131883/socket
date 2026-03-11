@@ -2,6 +2,8 @@ package com.socket.server.service;
 
 import com.socket.server.domain.User;
 import com.socket.server.repository.CacheRepository;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -13,14 +15,15 @@ import java.util.Optional;
  * 소켓 세션 관리 서비스 (L1 캐시 활용)
  */
 @Service
+@RequiredArgsConstructor
 public class SessionService {
     private static final Logger log = LoggerFactory.getLogger(SessionService.class);
 
+    @Qualifier("sessionCache")
     private final CacheRepository<String, User> sessionCache;
 
-    public SessionService(@Qualifier("sessionCache") CacheRepository<String, User> sessionCache) {
-        this.sessionCache = sessionCache;
-        
+    @PostConstruct
+    public void init() {
         // Observer 패턴: 연결 종료 이벤트 구독
         com.socket.server.event.EventBus.getInstance().subscribe(event -> {
             if (event instanceof com.socket.server.event.SessionClosedEvent) {

@@ -3,6 +3,7 @@ package com.socket.client;
 import com.socket.client.domain.ChatMessage;
 import com.socket.client.domain.MessageType;
 import com.socket.client.serializer.JsonMessageSerializer;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,6 +21,7 @@ import java.util.concurrent.Executors;
 import java.time.format.DateTimeFormatter;
 
 @Service
+@RequiredArgsConstructor
 public class SocketClientService {
 
     private static final Logger log = LoggerFactory.getLogger(SocketClientService.class);
@@ -38,10 +40,6 @@ public class SocketClientService {
     private DataOutputStream out;
     private DataInputStream in;
     private volatile boolean connected = false;
-
-    public SocketClientService(JsonMessageSerializer<ChatMessage> serializer) {
-        this.serializer = serializer;
-    }
 
     @EventListener(ApplicationReadyEvent.class)
     public void startClient() {

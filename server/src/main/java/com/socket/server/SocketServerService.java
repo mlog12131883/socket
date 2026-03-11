@@ -22,6 +22,7 @@ import com.socket.server.event.SessionClosedEvent;
 import com.socket.server.repository.SessionRegistry;
 
 @Service
+@lombok.RequiredArgsConstructor
 public class SocketServerService {
 
     private static final Logger log = LoggerFactory.getLogger(SocketServerService.class);
@@ -36,20 +37,15 @@ public class SocketServerService {
 
     private ServerSocket serverSocket;
     private final ExecutorService bossExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "Boss-Acceptor"));
-    private final ThreadPoolExecutor workerExecutor;
+    private ThreadPoolExecutor workerExecutor;
     private volatile boolean isRunning = false;
 
     private final JsonMessageSerializer<ChatMessage> serializer;
     private final com.socket.server.dispatcher.SocketDispatcher dispatcher;
     private final SessionRegistry sessionRegistry;
 
-    public SocketServerService(JsonMessageSerializer<ChatMessage> serializer, 
-                               com.socket.server.dispatcher.SocketDispatcher dispatcher,
-                               SessionRegistry sessionRegistry) {
-        this.serializer = serializer;
-        this.dispatcher = dispatcher;
-        this.sessionRegistry = sessionRegistry;
-        
+    @jakarta.annotation.PostConstruct
+    public void init() {
         // 커스텀 ThreadPoolExecutor 생성 (Worker)
         this.workerExecutor = new ThreadPoolExecutor(
                 CORE_POOL_SIZE,

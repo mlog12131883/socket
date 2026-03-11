@@ -3,6 +3,7 @@ package com.socket.server.dispatcher;
 import com.socket.server.annotation.MessageMapping;
 import com.socket.server.annotation.SocketController;
 import com.socket.server.domain.MessageType;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
@@ -14,15 +15,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Component
+@RequiredArgsConstructor
 public class HandlerMapping {
     private static final Logger log = LoggerFactory.getLogger(HandlerMapping.class);
     
     private final ApplicationContext applicationContext;
     private final Map<Integer, HandlerMethod> handlerMap = new HashMap<>();
-
-    public HandlerMapping(ApplicationContext applicationContext) {
-        this.applicationContext = applicationContext;
-    }
 
     @PostConstruct
     public void init() {

@@ -6,6 +6,8 @@ import com.socket.server.domain.User;
 import com.socket.server.repository.CacheRepository;
 import com.socket.server.repository.SessionRegistry;
 import com.socket.server.serializer.JsonMessageSerializer;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -23,21 +25,18 @@ import java.util.stream.Collectors;
  * 채팅방 관리 서비스 (L1 캐시 활용)
  */
 @Service
+@RequiredArgsConstructor
 public class RoomService {
     private static final Logger log = LoggerFactory.getLogger(RoomService.class);
 
+    @Qualifier("roomCache")
     private final CacheRepository<String, ChatRoom> roomCache;
     private final SessionRegistry sessionRegistry;
     private final JsonMessageSerializer<ChatMessage> serializer;
     private final ExecutorService broadcastExecutor = Executors.newFixedThreadPool(10); // 브로드캐스팅 전용 스레드 풀
 
-    public RoomService(@Qualifier("roomCache") CacheRepository<String, ChatRoom> roomCache,
-                       SessionRegistry sessionRegistry,
-                       JsonMessageSerializer<ChatMessage> serializer) {
-        this.roomCache = roomCache;
-        this.sessionRegistry = sessionRegistry;
-        this.serializer = serializer;
-
+    @PostConstruct
+    public void init() {
         // Observer 패턴: 연결 종료 이벤트 구독
         com.socket.server.event.EventBus.getInstance().subscribe(event -> {
             if (event instanceof com.socket.server.event.SessionClosedEvent) {

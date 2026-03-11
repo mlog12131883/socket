@@ -2,6 +2,7 @@ package com.socket.server.dispatcher;
 
 import com.socket.server.interceptor.ChannelInterceptor;
 import com.socket.server.serializer.JsonMessageSerializer;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -12,20 +13,13 @@ import java.net.Socket;
 import java.util.List;
 
 @Component
+@RequiredArgsConstructor
 public class SocketDispatcher {
     private static final Logger log = LoggerFactory.getLogger(SocketDispatcher.class);
 
     private final HandlerMapping handlerMapping;
     private final JsonMessageSerializer<?> serializer;
     private final List<ChannelInterceptor> interceptors;
-
-    public SocketDispatcher(HandlerMapping handlerMapping, 
-                            JsonMessageSerializer<?> serializer,
-                            List<ChannelInterceptor> interceptors) {
-        this.handlerMapping = handlerMapping;
-        this.serializer = serializer;
-        this.interceptors = interceptors;
-    }
 
     /**
      * 수신된 메시지를 적절한 컨트롤러 메서드로 디스패치합니다.
