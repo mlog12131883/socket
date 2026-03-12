@@ -4,7 +4,7 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 /**
- * 채팅 메시지 도메인 클래스
+ * Chat message domain class
  */
 @Getter
 @Setter
