@@ -31,6 +31,7 @@ public class RoomService {
     private final SessionRegistry sessionRegistry;
     private final JsonMessageSerializer<ChatMessage> serializer;
     private final ObjectProvider<RoomService> selfProvider;
+    private final RedisPublisher redisPublisher;
     private final ExecutorService broadcastExecutor = Executors.newFixedThreadPool(10);
 
     private RoomService getSelf() {
@@ -107,11 +108,19 @@ public class RoomService {
     }
 
     /**
-     * 방에 참여 중인 모든 유저에게 메시지 브로드캐스팅 (비동기 처리)
+     * 방에 참여 중인 모든 유저에게 메시지 브로드캐스팅 (Redis Pub/Sub 이용)
      */
     public void broadcast(String roomId, ChatMessage message) {
+        log.info("[RoomService] Redis 채널로 메시지 발행: roomId={}, messageType={}", roomId, message.getType());
+        redisPublisher.publishChat(message);
+    }
+
+    /**
+     * 타 서버나 현재 서버에서 발행한 Redis 메시지를 현재 서버의 로컬 클라이언트들에게만 전사 (비동기 처리)
+     */
+    public void broadcastLocal(String roomId, ChatMessage message) {
         getSelf().getRoom(roomId).ifPresent(room -> {
-            log.info("[RoomService] 브로드캐스팅 시작: roomId={}, messageType={}, activeUsersCount={}", 
+            log.info("[RoomService] 로컬 브로드캐스팅 시작: roomId={}, messageType={}, localActiveUsers={}", 
                     roomId, message.getType(), room.getActiveUsers().size());
             byte[] payload = serializer.serialize(message);
             
@@ -128,7 +137,7 @@ public class RoomService {
                                 out.flush();
                             }
                         } catch (Exception e) {
-                            log.error("브로드캐스팅 실패: userId={}, roomId={}", user.getId(), roomId, e);
+                            log.error("로컬 브로드캐스팅 실패: userId={}, roomId={}", user.getId(), roomId, e);
                         }
                     });
                 }

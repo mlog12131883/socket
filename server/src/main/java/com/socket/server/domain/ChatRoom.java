@@ -1,6 +1,8 @@
 package com.socket.server.domain;
 
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import java.util.Collections;
 import java.util.Set;
@@ -10,11 +12,18 @@ import java.util.concurrent.ConcurrentHashMap;
  * 채팅방 도메인 클래스
  */
 @Getter
-@RequiredArgsConstructor
+@NoArgsConstructor(force = true)
+@AllArgsConstructor
 public class ChatRoom {
     private final String id;
     private final String name;
-    private final Set<User> activeUsers = ConcurrentHashMap.newKeySet();
+    private final Set<User> activeUsers;
+
+    public ChatRoom(String id, String name) {
+        this.id = id;
+        this.name = name;
+        this.activeUsers = ConcurrentHashMap.newKeySet();
+    }
 
     // 비즈니스 메서드 (입장)
     public void enter(User user) {

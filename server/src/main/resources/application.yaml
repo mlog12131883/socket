@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: server
+  cache:
+    type: redis
+  data:
+    redis:
+      host: localhost
+      port: 6380
+      # password: redis1234
+      # \uC704 3\uC904(host, port, password)\uB85C \uC5F0\uACB0\uC774 \uC548 \uB420 \uACBD\uC6B0,
+      # \uC704 3\uC904\uC744 \uC9C0\uC6B0\uACE0 \uC544\uB798 \uD55C \uC904\uC758 \uC8FC\uC11D(#)\uC744 \uD574\uC81C\uD558\uC5EC url \uBC29\uC2DD\uC744 \uC0AC\uC6A9\uD574 \uBCF4\uC138\uC694.
+      # url: redis://:redis1234@localhost:6379
+
+logging:
+  level:
+    com:
+      socket: INFO

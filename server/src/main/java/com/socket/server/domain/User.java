@@ -11,6 +11,7 @@ import lombok.*;
 @Setter
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @RequiredArgsConstructor
+@NoArgsConstructor(force = true)
 public class User {
     @EqualsAndHashCode.Include
     private final String id;
