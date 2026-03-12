@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * 전역 이벤트를 관장하는 싱글톤 이벤트 버스 (옵저버 패턴)
+ * Singleton event bus governing global events (Observer pattern)
  */
 public class EventBus {
     private static final Logger log = LoggerFactory.getLogger(EventBus.class);
@@ -26,7 +26,7 @@ public class EventBus {
     }
 
     public synchronized void publish(Object event) {
-        log.info("[EventBus] 이벤트 발행: {}", event.getClass().getSimpleName());
+        log.info("[EventBus] Event published: {}", event.getClass().getSimpleName());
         for (Consumer<Object> subscriber : subscribers) {
             subscriber.accept(event);
         }

@@ -5,7 +5,7 @@ import com.socket.server.domain.state.SessionState;
 import lombok.*;
 
 /**
- * 사용자 도메인 클래스 (세션 역할 겸임)
+ * User domain class (also serves as session)
  */
 @Getter
 @Setter
@@ -16,7 +16,7 @@ public class User {
     @EqualsAndHashCode.Include
     private final String id;
     private String nickname;
-    private SessionState state = new ConnectedState(); // 초기 상태: 연결됨(미인증)
+    private SessionState state = new ConnectedState(); // Initial state: Connected (Unauthenticated)
 
     public User(String id, String nickname) {
         this.id = id;
@@ -24,9 +24,9 @@ public class User {
         this.state = new ConnectedState(); 
     }
 
-    // 의미 있는 비즈니스 로직을 통한 상태 변경 (캡슐화 원칙)
+    // State change through meaningful business logic (encapsulation principle)
     public void disconnect() {
-        // DisconnectedState로 전이 로직 등을 추가할 수 있음
+        // Transition logic to DisconnectedState, etc. can be added
     }
 
     public void connect() {

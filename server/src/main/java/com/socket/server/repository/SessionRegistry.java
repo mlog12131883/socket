@@ -8,7 +8,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 접속 중인 사용자의 소켓 출력 스트림 및 소켓-사용자 매핑을 관리하는 저장소
+ * Repository that manages socket output streams and socket-user mappings for connected users
  */
 @Component
 public class SessionRegistry {
@@ -22,14 +22,14 @@ public class SessionRegistry {
     private final Map<Socket, DataOutputStream> socketToOut = new ConcurrentHashMap<>();
 
     /**
-     * 소켓 연결 시 출력 스트림을 먼저 등록 (유저 ID 확인 전)
+     * Register output stream during socket connection (prior to user ID verification)
      */
     public void addSocket(Socket socket, DataOutputStream out) {
         socketToOut.put(socket, out);
     }
 
     /**
-     * 유저 인증(ENTER) 후 소켓과 유저 ID 매핑 등록
+     * Register mapping between socket and user ID after user authentication (ENTER)
      */
     public void register(String userId, Socket socket) {
         DataOutputStream out = socketToOut.get(socket);
@@ -42,7 +42,7 @@ public class SessionRegistry {
     }
 
     /**
-     * 수동 등록 (테스트 또는 예외 상황용)
+     * Manual registration (for testing or exceptional situations)
      */
     public void register(String userId, Socket socket, DataOutputStream out) {
         socketToOut.put(socket, out);
@@ -52,7 +52,7 @@ public class SessionRegistry {
 
     public void unregister(String userId) {
         userToOut.remove(userId);
-        // reverse mapping도 찾아서 제거 (성능 최적화 가능)
+        // Find and remove reverse mapping as well (performance optimization possible)
         socketToUser.entrySet().removeIf(entry -> entry.getValue().equals(userId));
     }
 

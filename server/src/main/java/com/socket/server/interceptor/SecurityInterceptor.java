@@ -9,23 +9,23 @@ import java.net.Socket;
 @Component
 public class SecurityInterceptor implements ChannelInterceptor {
     private static final Logger log = LoggerFactory.getLogger(SecurityInterceptor.class);
-    private static final int MAX_PAYLOAD_SIZE = 1024 * 10; // 10KB 제한
+    private static final int MAX_PAYLOAD_SIZE = 1024 * 10; // 10KB limit
 
     @Override
     public boolean preHandle(Socket socket, int messageType, byte[] payload) {
-        // 1. 페이로드 크기 검증
+        // 1. Verify payload size
         if (payload.length > MAX_PAYLOAD_SIZE) {
-            log.warn("[Security] 페이로드 크기 초과: {} bytes, 클라이언트: {}", payload.length, socket.getInetAddress());
+            log.warn("[Security] Payload size exceeded: {} bytes, Client: {}", payload.length, socket.getInetAddress());
             return false;
         }
 
-        // 2. IP 검증 (예시: localhost만 허용하는 블랙리스트 등 확장 가능)
-        // log.info("[Security] 보안 검사 통과: {}", socket.getInetAddress());
+        // 2. IP verification (Example: can be extended to blacklists or allowing only localhost)
+        // log.info("[Security] Security check passed: {}", socket.getInetAddress());
         return true;
     }
 
     @Override
     public void postHandle(Socket socket, int messageType, Object result) {
-        // 후처리 로직 필요 시 구현
+        // Implement post-processing logic if needed
     }
 }

@@ -21,7 +21,7 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
- * 채팅방 관리 서비스 (Spring Cache 추상화 + Self-Injection 활용)
+ * Chat room management service (Uses Spring Cache abstraction + Self-Injection)
  */
 @Service
 @RequiredArgsConstructor
@@ -40,7 +40,7 @@ public class RoomService {
 
     @PostConstruct
     public void init() {
-        // Observer 패턴: 연결 종료 이벤트 구독
+        // Observer pattern: Subscribe to session closed event
         com.socket.server.event.EventBus.getInstance().subscribe(event -> {
             if (event instanceof com.socket.server.event.SessionClosedEvent) {
                 handleSessionClosed((com.socket.server.event.SessionClosedEvent) event);
@@ -49,11 +49,11 @@ public class RoomService {
     }
 
     private void handleSessionClosed(com.socket.server.event.SessionClosedEvent event) {
-        log.info("[RoomService] 연결 종료 이벤트 수신: {}", event.getUserId());
+        log.info("[RoomService] Session closed event received: {}", event.getUserId());
     }
 
     /**
-     * 채팅방 생성 및 캐시 저장
+     * Create chat room and store in cache
      */
     @CachePut(value = "rooms", key = "#roomId")
     public ChatRoom createRoom(String roomId, String roomName) {
@@ -63,7 +63,7 @@ public class RoomService {
     }
 
     /**
-     * 채팅방 정보 조회 (캐시 히트 우선)
+     * Get chat room information (cache first)
      */
     @Cacheable(value = "rooms", key = "#roomId")
     public Optional<ChatRoom> getRoom(String roomId) {
@@ -72,7 +72,7 @@ public class RoomService {
     }
 
     /**
-     * 채팅방 입장 처리
+     * Handle room entry
      */
     @CachePut(value = "rooms", key = "#roomId")
     public ChatRoom joinRoom(String roomId, User user) {
@@ -88,7 +88,7 @@ public class RoomService {
     }
 
     /**
-     * 채팅방 퇴장 처리
+     * Handle room exit
      */
     @CachePut(value = "rooms", key = "#roomId")
     public ChatRoom leaveRoom(String roomId, User user) {
@@ -101,26 +101,26 @@ public class RoomService {
     }
 
     /**
-     * 채팅방 존재 여부 확인
+     * Check if room exists
      */
     public boolean existsRoom(String roomId) {
         return getSelf().getRoom(roomId).isPresent();
     }
 
     /**
-     * 방에 참여 중인 모든 유저에게 메시지 브로드캐스팅 (Redis Pub/Sub 이용)
+     * Broadcast message to all users in the room (using Redis Pub/Sub)
      */
     public void broadcast(String roomId, ChatMessage message) {
-        log.info("[RoomService] Redis 채널로 메시지 발행: roomId={}, messageType={}", roomId, message.getType());
+        log.info("[RoomService] Publishing message to Redis channel: roomId={}, messageType={}", roomId, message.getType());
         redisPublisher.publishChat(message);
     }
 
     /**
-     * 타 서버나 현재 서버에서 발행한 Redis 메시지를 현재 서버의 로컬 클라이언트들에게만 전사 (비동기 처리)
+     * Forward Redis messages issued from other servers or current server only to local clients (Asynchronous process)
      */
     public void broadcastLocal(String roomId, ChatMessage message) {
         getSelf().getRoom(roomId).ifPresent(room -> {
-            log.info("[RoomService] 로컬 브로드캐스팅 시작: roomId={}, messageType={}, localActiveUsers={}", 
+            log.info("[RoomService] Local broadcasting started: roomId={}, messageType={}, localActiveUsers={}", 
                     roomId, message.getType(), room.getActiveUsers().size());
             byte[] payload = serializer.serialize(message);
             
@@ -137,7 +137,7 @@ public class RoomService {
                                 out.flush();
                             }
                         } catch (Exception e) {
-                            log.error("로컬 브로드캐스팅 실패: userId={}, roomId={}", user.getId(), roomId, e);
+                            log.error("Local broadcasting failed: userId={}, roomId={}", user.getId(), roomId, e);
                         }
                     });
                 }
@@ -146,7 +146,7 @@ public class RoomService {
     }
 
     /**
-     * 현재 채팅방의 유저 목록을 모든 참여자에게 전송
+     * Send the list of current users in the chat room to all participants
      */
     public void broadcastUserList(String roomId) {
         getSelf().getRoom(roomId).ifPresent(room -> {

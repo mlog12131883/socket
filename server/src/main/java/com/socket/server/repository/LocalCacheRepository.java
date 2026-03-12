@@ -6,7 +6,7 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 /**
- * Caffeine 라이브러리를 사용한 로컬 캐시 저장소 구현체 (L1 캐시)
+ * Local cache repository implementation using the Caffeine library (L1 cache)
  */
 public class LocalCacheRepository<K, V> implements CacheRepository<K, V> {
 

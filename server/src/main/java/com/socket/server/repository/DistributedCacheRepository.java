@@ -7,7 +7,7 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Redis 라이브러리를 사용한 글로벌 분산 캐시 저장소 구현체 (L2 캐시)
+ * Global distributed cache repository implementation using the Redis library (L2 cache)
  */
 @Repository
 public class DistributedCacheRepository<K, V> implements CacheRepository<K, V> {
@@ -24,7 +24,7 @@ public class DistributedCacheRepository<K, V> implements CacheRepository<K, V> {
     }
 
     /**
-     * TTL(Time-To-Live) 설정을 포함한 저장 메서드
+     * Storage method including TTL (Time-To-Live) settings
      */
     public void save(K key, V value, long timeout, TimeUnit unit) {
         redisTemplate.opsForValue().set(key, value, timeout, unit);

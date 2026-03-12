@@ -9,7 +9,7 @@ public class DisconnectedState implements SessionState {
 
     @Override
     public void handle(User user, int messageType) {
-        log.info("[State] 연결 종료 상태 - 사용자: {}", user.getNickname());
+        log.info("[State] Connection terminated state - user: {}", user.getNickname());
     }
 
     @Override

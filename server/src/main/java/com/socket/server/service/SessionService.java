@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 import java.util.Optional;
 
 /**
- * 소켓 세션 관리 서비스 (Spring Cache 추상화 + Self-Injection 활용)
+ * Socket session management service (Uses Spring Cache abstraction + Self-Injection)
  */
 @Service
 @RequiredArgsConstructor
@@ -29,7 +29,7 @@ public class SessionService {
 
     @PostConstruct
     public void init() {
-        // Observer 패턴: 연결 종료 이벤트 구독
+        // Observer pattern: Subscribe to session closed event
         com.socket.server.event.EventBus.getInstance().subscribe(event -> {
             if (event instanceof com.socket.server.event.SessionClosedEvent) {
                 handleSessionClosed((com.socket.server.event.SessionClosedEvent) event);
@@ -38,12 +38,12 @@ public class SessionService {
     }
 
     private void handleSessionClosed(com.socket.server.event.SessionClosedEvent event) {
-        log.info("[SessionService] 연결 종료 이벤트 수신: {}", event.getUserId());
+        log.info("[SessionService] Session closed event received: {}", event.getUserId());
         getSelf().removeSession(event.getUserId());
     }
 
     /**
-     * 사용자 세션 등록
+     * Register user session
      */
     @CachePut(value = "sessions", key = "#sessionId")
     public User registerSession(String sessionId, User user) {
@@ -52,7 +52,7 @@ public class SessionService {
     }
 
     /**
-     * 세션 정보 조회
+     * Get session information
      */
     @Cacheable(value = "sessions", key = "#sessionId")
     public Optional<User> getSession(String sessionId) {
@@ -61,7 +61,7 @@ public class SessionService {
     }
 
     /**
-     * 세션 제거 및 연결 종료 처리
+     * Remove session and handle disconnection
      */
     @CacheEvict(value = "sessions", key = "#sessionId")
     public void removeSession(String sessionId) {
@@ -72,7 +72,7 @@ public class SessionService {
     }
 
     /**
-     * 세션 존재 여부 확인
+     * Check if session is active
      */
     public boolean isSessionActive(String sessionId) {
         return getSelf().getSession(sessionId).isPresent();

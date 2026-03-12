@@ -26,14 +26,14 @@ public class HandlerMapping {
     public void init() {
         log.info("Initializing HandlerMapping using Spring ApplicationContext...");
         
-        // 1. @SocketController 어노테이션이 붙은 모든 빈을 찾음
+        // 1. Find all beans with @SocketController annotation
         Map<String, Object> beans = applicationContext.getBeansWithAnnotation(SocketController.class);
         
         for (Object instance : beans.values()) {
             Class<?> clazz = instance.getClass();
             log.info("Found @SocketController bean: {}", clazz.getName());
             
-            // 2. 메서드 탐색
+            // 2. Scan methods
             for (Method method : clazz.getDeclaredMethods()) {
                 if (method.isAnnotationPresent(MessageMapping.class)) {
                     MessageMapping mapping = method.getAnnotation(MessageMapping.class);
@@ -52,8 +52,8 @@ public class HandlerMapping {
     }
 
 
-    /**
-     * 실행할 인스턴스와 메서드를 담는 래퍼 클래스
+     /**
+     * Wrapper class to hold the instance and method to execute
      */
     public static class HandlerMethod {
         private final Object instance;

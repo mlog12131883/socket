@@ -46,7 +46,7 @@ public class SocketServerService {
 
     @jakarta.annotation.PostConstruct
     public void init() {
-        // 커스텀 ThreadPoolExecutor 생성 (Worker)
+        // Create custom ThreadPoolExecutor (Worker)
         this.workerExecutor = new ThreadPoolExecutor(
                 CORE_POOL_SIZE,
                 MAX_POOL_SIZE,
@@ -64,60 +64,60 @@ public class SocketServerService {
             try {
                 serverSocket = new ServerSocket(port);
                 isRunning = true;
-                log.info("소켓 서버가 포트 {}에서 대기 중입니다... (WAS 방식 스레드 풀 적용)", port);
+                log.info("Socket server is listening on port {}... (WAS-style thread pool applied)", port);
 
                 while (isRunning) {
                     try {
                         Socket clientSocket = serverSocket.accept();
-                        log.info("클라이언트 접속 수락: {}", clientSocket.getInetAddress());
+                        log.info("Client connection accepted: {}", clientSocket.getInetAddress());
                         
-                        // 실제 처리는 Worker 스레드 풀로 위임 (Non-blocking Accept)
+                        // Delegate actual processing to worker thread pool (Non-blocking Accept)
                         try {
                             workerExecutor.submit(() -> handleClient(clientSocket));
                         } catch (RejectedExecutionException e) {
-                            log.warn("작업 큐가 가득 차서 연결을 거절합니다: {}", clientSocket.getInetAddress());
+                            log.warn("Task queue is full, rejecting connection: {}", clientSocket.getInetAddress());
                             clientSocket.close();
                         }
                     } catch (IOException e) {
                         if (isRunning) {
-                            log.error("클라이언트 연결 수락 중 오류 발생", e);
+                            log.error("Error occurred while accepting client connection", e);
                         }
                     }
                 }
             } catch (IOException e) {
-                log.error("서버 소켓 생성 오류", e);
+                log.error("Error creating server socket", e);
             }
         });
     }
 
     private void handleClient(Socket clientSocket) {
-        log.info("클라이언트 처리 시작: {}", clientSocket.getInetAddress());
+        log.info("Starting client processing: {}", clientSocket.getInetAddress());
         try (DataInputStream in = new DataInputStream(clientSocket.getInputStream());
              DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream())) {
 
-            // SessionRegistry에 소켓과 출력 스트림 등록 (동일 인스턴스 공유 보장)
+            // Register socket and output stream in SessionRegistry (ensures shared instance sharing)
             sessionRegistry.addSocket(clientSocket, out);
 
-            // 연결 지속성 설정
-            clientSocket.setKeepAlive(true); // TCP Keep-Alive 활성화
-            clientSocket.setSoTimeout(0);    // 타임아웃 무제한 설정
+            // Connection persistence settings
+            clientSocket.setKeepAlive(true); // Enable TCP Keep-Alive
+            clientSocket.setSoTimeout(0);    // Set timeout to infinite
 
             while (isRunning) {
                 try {
-                    // 1. 헤더(Payload 길이) 읽기 (4 bytes)
+                    // 1. Read header (Payload length) (4 bytes)
                     int length = in.readInt();
                     
-                    // 2. 헤더(메시지 타입) 읽기 (4 bytes)
+                    // 2. Read header (Message type) (4 bytes)
                     int messageType = in.readInt();
 
-                    // 3. Body 데이터 읽기
+                    // 3. Read Body data
                     byte[] payload = new byte[length];
                     in.readFully(payload);
 
-                    // 4. Dispatcher를 통한 라우팅 및 동적 실행 (Socket 전달)
+                    // 4. Routing and dynamic execution through Dispatcher (passing Socket)
                     Object response = dispatcher.dispatch(clientSocket, messageType, payload);
 
-                    // 에코 응답
+                    // Echo response
                     if (response != null) {
                         byte[] responsePayload = serializer.serialize((ChatMessage) response);
                         
@@ -129,27 +129,27 @@ public class SocketServerService {
                         }
                     }
                 } catch (java.io.EOFException | java.net.SocketException e) {
-                    // 연결 끊김 관련 예외는 외부로 던져 finally에서 정리하도록 함
+                    // Connection disconnection exceptions are thrown to be handled in finally block
                     throw e;
                 } catch (Exception e) {
-                    // 개별 메시지 처리 중 발생하는 비즈니스 로직 에러는 로그만 남기고 연결 유지
-                    log.error("메시지 처리 중 에러 발생 (연결 상태 유지): {}", clientSocket.getInetAddress(), e);
+                    // Business logic errors during individual message processing are logged, and connection is maintained
+                    log.error("Error processing message (maintaining connection): {}", clientSocket.getInetAddress(), e);
                 }
             }
         } catch (java.io.EOFException | java.net.SocketException e) {
-            log.info("클라이언트 연결 종료 또는 초기화: {}", clientSocket.getInetAddress());
+            log.info("Client connection terminated or initialized: {}", clientSocket.getInetAddress());
         } catch (Exception e) {
             if (isRunning) {
-                log.error("클라이언트 통신 에너 (세션 종료): {}", clientSocket.getInetAddress(), e);
+                log.error("Client communication error (session terminated): {}", clientSocket.getInetAddress(), e);
             }
         } finally {
-            // SessionRegistry를 통해 userId 식별
+            // Identify userId via SessionRegistry
             String userId = sessionRegistry.getUserId(clientSocket).orElse(clientSocket.getInetAddress().toString());
             
-            // Observer 패턴: 연결 종료 이벤트 발행
+            // Observer Pattern: Publish session closed event
             EventBus.getInstance().publish(new SessionClosedEvent(userId));
             
-            // 세션 등록 정보 제거
+            // Remove session registration info
             sessionRegistry.unregisterBySocket(clientSocket);
             
             try {
@@ -157,14 +157,14 @@ public class SocketServerService {
                     clientSocket.close();
                 }
             } catch (IOException e) {
-                log.warn("소켓 닫기 실패", e);
+                log.warn("Failed to close socket", e);
             }
         }
     }
 
     @PreDestroy
     public void stopServer() {
-        log.info("소켓 서버를 종료합니다. (Graceful Shutdown 시작)");
+        log.info("Shutting down socket server... (Graceful shutdown started)");
         isRunning = false;
         
         try {
@@ -172,16 +172,16 @@ public class SocketServerService {
                 serverSocket.close();
             }
         } catch (IOException e) {
-            log.error("서버 소켓 종료 중 오류 발생", e);
+            log.error("Error occurred while closing server socket", e);
         }
 
         bossExecutor.shutdown();
         workerExecutor.shutdown();
 
         try {
-            // 잔여 작업 처리를 위한 대기
+            // Wait for remaining tasks to complete
             if (!workerExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
-                log.warn("워커 스레드 풀이 30초 내에 종료되지 않아 강제 종료합니다.");
+                log.warn("Worker thread pool did not terminate within 30 seconds, forcing shutdown.");
                 workerExecutor.shutdownNow();
             }
         } catch (InterruptedException e) {
@@ -189,7 +189,7 @@ public class SocketServerService {
             Thread.currentThread().interrupt();
         }
         
-        log.info("소켓 서버가 완전히 종료되었습니다.");
+        log.info("Socket server has been completely shut down.");
     }
 
     /**

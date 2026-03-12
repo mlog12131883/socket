@@ -9,7 +9,7 @@ import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Service;
 
 /**
- * Redis Pub/Sub 메시지 발행 서비스
+ * Redis Pub/Sub message publishing service
  */
 @Service
 @RequiredArgsConstructor
@@ -24,7 +24,7 @@ public class RedisPublisher {
     }
 
     /**
-     * 공통 채팅 채널로 메시지 발행
+     * Publish message to common chat channel
      */
     public void publishChat(ChatMessage message) {
         publish("chat:rooms", message);

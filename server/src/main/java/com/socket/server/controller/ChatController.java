@@ -30,43 +30,43 @@ public class ChatController {
 
     @MessageMapping(MessageType.ENTER)
     public void handleEnter(@MessageBody ChatMessage message, Socket clientSocket) {
-        log.info("[ChatController] 입장 메시지 처리: 방 [{}], 사용자 [{}]", message.getRoomId(), message.getSenderId());
+        log.info("[ChatController] Processing enter message: room [{}], user [{}]", message.getRoomId(), message.getSenderId());
         
-        // 1. 사용자 객체 생성 및 세션 등록
+        // 1. Create user object and register session
         User user = new User(message.getSenderId(), message.getSenderId());
         sessionService.registerSession(message.getSenderId(), user);
         
-        // SessionRegistry에 소켓-사용자 매핑 등록 (이미 등록된 out 스트림 사용)
+        // Register socket-user mapping in SessionRegistry (use existing out stream)
         sessionRegistry.register(message.getSenderId(), clientSocket);
 
-        // 2. 채팅방 조회 또는 생성
+        // 2. Fetch or create chat room
         ChatRoom room = roomService.getRoom(message.getRoomId())
                 .orElseGet(() -> roomService.createRoom(message.getRoomId(), "New Room " + message.getRoomId()));
 
-        // 3. 채팅방 입장
+        // 3. Enter chat room
         roomService.joinRoom(message.getRoomId(), user);
 
-        // 4. 상태 전이 (Connected -> Authenticated)
+        // 4. State transition (Connected -> Authenticated)
         user.setState(new com.socket.server.domain.state.AuthenticatedState());
-        log.info("[ChatController] 사용자 [{}] 상태 변경: {}", user.getId(), user.getState().getStateName());
+        log.info("[ChatController] User [{}] state changed: {}", user.getId(), user.getState().getStateName());
 
-        // 5. 브로드캐스팅: 입장 알림 및 유저 목록
-        message.setContent(message.getSenderId() + "님이 입장했습니다.");
+        // 5. Broadcasting: Enter notification and user list
+        message.setContent(message.getSenderId() + " has entered.");
         roomService.broadcast(message.getRoomId(), message);
     }
 
     @MessageMapping(MessageType.CHAT)
     public void handleChat(@MessageBody ChatMessage message) {
-        log.info("[ChatController] 일반 채팅 메시지 처리: 방 [{}], 사용자 [{}], 내용 [{}]", 
+        log.info("[ChatController] Processing chat message: room [{}], user [{}], content [{}]", 
                 message.getRoomId(), message.getSenderId(), message.getContent());
         
-        // 브로드캐스팅: 전체 메시지 전파
+        // Broadcasting: Forward message to everyone
         roomService.broadcast(message.getRoomId(), message);
     }
 
     @MessageMapping(MessageType.LEAVE)
     public void handleLeave(@MessageBody ChatMessage message) {
-        log.info("[ChatController] 퇴장 메시지 처리: 방 [{}], 사용자 [{}]", message.getRoomId(), message.getSenderId());
+        log.info("[ChatController] Processing leave message: room [{}], user [{}]", message.getRoomId(), message.getSenderId());
         
         sessionService.getSession(message.getSenderId()).ifPresent(user -> {
             roomService.leaveRoom(message.getRoomId(), user);
@@ -74,7 +74,7 @@ public class ChatController {
             sessionRegistry.unregister(message.getSenderId());
         });
 
-        message.setContent(message.getSenderId() + "님이 퇴장했습니다.");
+        message.setContent(message.getSenderId() + " has left.");
         roomService.broadcast(message.getRoomId(), message);
     }
 }

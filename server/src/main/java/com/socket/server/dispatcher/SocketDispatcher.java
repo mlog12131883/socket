@@ -22,18 +22,18 @@ public class SocketDispatcher {
     private final List<ChannelInterceptor> interceptors;
 
     /**
-     * 수신된 메시지를 적절한 컨트롤러 메서드로 디스패치합니다.
+     * Dispatches the received message to the appropriate controller method.
      * 
-     * @param clientSocket 클라이언트 소켓 (인터셉터에서 사용)
-     * @param messageType 메시지 타입
-     * @param payload JSON 바디 데이터
-     * @return 컨트롤러 실행 결과
+     * @param clientSocket Client socket (used in interceptors)
+     * @param messageType Message type
+     * @param payload JSON body data
+     * @return Controller execution result
      */
     public Object dispatch(Socket clientSocket, int messageType, byte[] payload) {
-        // 1. 인터셉터 Pre-Handle 실행
+        // 1. Execute interceptor Pre-Handle
         for (ChannelInterceptor interceptor : interceptors) {
             if (!interceptor.preHandle(clientSocket, messageType, payload)) {
-                log.warn("인터셉터에 의해 요청이 차단되었습니다: {}", interceptor.getClass().getSimpleName());
+                log.warn("Request blocked by interceptor: {}", interceptor.getClass().getSimpleName());
                 return null;
             }
         }
@@ -41,7 +41,7 @@ public class SocketDispatcher {
         HandlerMapping.HandlerMethod handler = handlerMapping.getHandler(messageType);
         
         if (handler == null) {
-            log.warn("매핑된 핸들러를 찾을 수 없습니다. messageType: {}", messageType);
+            log.warn("Mapped handler not found. messageType: {}", messageType);
             throw new IllegalArgumentException("No handler found for messageType: " + messageType);
         }
 
@@ -49,14 +49,14 @@ public class SocketDispatcher {
         Object instance = handler.getInstance();
         
         try {
-            // 매개변수 분석 및 바인딩
+            // Parameter analysis and binding
             Object[] args = resolveArguments(method, clientSocket, payload);
             
-            log.info("디스패처: 메서드 [{}] 실행 시작", method.getName());
-            // 동적 메서드 호출
+            log.info("Dispatcher: Starting execution of method [{}]", method.getName());
+            // Dynamic method invocation
             Object result = method.invoke(instance, args);
 
-            // 2. 인터셉터 Post-Handle 실행
+            // 2. Execute interceptor Post-Handle
             for (ChannelInterceptor interceptor : interceptors) {
                 interceptor.postHandle(clientSocket, messageType, result);
             }
@@ -64,7 +64,7 @@ public class SocketDispatcher {
             return result;
             
         } catch (Exception e) {
-            log.error("메서드 실행 중 오류 발생", e);
+            log.error("Error occurred during method execution", e);
             throw new RuntimeException("Method execution failed", e);
         }
     }
@@ -76,16 +76,16 @@ public class SocketDispatcher {
         for (int i = 0; i < parameters.length; i++) {
             Parameter parameter = parameters[i];
             
-            // @com.socket.server.annotation.MessageBody 어노테이션이 있는 경우
+            // If @com.socket.server.annotation.MessageBody annotation is present
             if (parameter.isAnnotationPresent(com.socket.server.annotation.MessageBody.class)) {
                 Class<?> targetType = parameter.getType();
-                // 직렬화기를 이용해 페이로드를 대상 클래스 타입으로 변환
+                // Convert payload to target class type using the serializer
                 args[i] = serializer.deserialize(payload, targetType);
             } else if (parameter.getType().equals(Socket.class)) {
-                // Socket 타입인 경우 현재 클라이언트 소켓 주입
+                // If parameter type is Socket, inject current client socket
                 args[i] = clientSocket;
             } else {
-                // 어노테이션이 없는 경우 기본적으로 null 처리 (또는 다른 확장 가능)
+                // Handle as null if no annotation is present (can be extended)
                 args[i] = null;
             }
         }
