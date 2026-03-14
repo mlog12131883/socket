@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 import java.util.Optional;
 
 /**
- * Socket session management service (Uses Spring Cache abstraction + Self-Injection)
+ * 소켓 세션 관리 서비스 (Spring Cache 추상화 + Self-Injection 사용)
  */
 @Service
 @RequiredArgsConstructor
@@ -29,7 +29,7 @@ public class SessionService {
 
     @PostConstruct
     public void init() {
-        // Observer pattern: Subscribe to session closed event
+        // Observer 패턴: 세션 종료 이벤트 구독
         com.socket.server.event.EventBus.getInstance().subscribe(event -> {
             if (event instanceof com.socket.server.event.SessionClosedEvent) {
                 handleSessionClosed((com.socket.server.event.SessionClosedEvent) event);
@@ -43,7 +43,7 @@ public class SessionService {
     }
 
     /**
-     * Register user session
+     * 사용자 세션 등록
      */
     @CachePut(value = "sessions", key = "#sessionId")
     public User registerSession(String sessionId, User user) {
@@ -52,7 +52,7 @@ public class SessionService {
     }
 
     /**
-     * Get session information
+     * 세션 정보 조회
      */
     @Cacheable(value = "sessions", key = "#sessionId")
     public Optional<User> getSession(String sessionId) {
@@ -61,7 +61,7 @@ public class SessionService {
     }
 
     /**
-     * Remove session and handle disconnection
+     * 세션 제거 및 연결 해제 처리
      */
     @CacheEvict(value = "sessions", key = "#sessionId")
     public void removeSession(String sessionId) {
@@ -72,7 +72,7 @@ public class SessionService {
     }
 
     /**
-     * Check if session is active
+     * 세션 활성 여부 확인
      */
     public boolean isSessionActive(String sessionId) {
         return getSelf().getSession(sessionId).isPresent();

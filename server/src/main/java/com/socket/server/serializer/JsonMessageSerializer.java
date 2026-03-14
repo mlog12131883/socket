@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 
 /**
- * JSON message serializer implementation using Jackson ObjectMapper
+ * Jackson ObjectMapper를 사용한 JSON 메시지 직렬화기 구현체
  */
 @Component
 public class JsonMessageSerializer<T> implements MessageSerializer<T> {
@@ -17,7 +17,7 @@ public class JsonMessageSerializer<T> implements MessageSerializer<T> {
 
     public JsonMessageSerializer() {
         this.objectMapper = new ObjectMapper();
-        // Register Java 8 LocalDateTime support module
+        // Java 8 LocalDateTime 지원 모듈 등록
         this.objectMapper.registerModule(new JavaTimeModule());
     }
 

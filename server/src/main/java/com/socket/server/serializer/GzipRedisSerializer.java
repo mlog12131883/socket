@@ -45,7 +45,7 @@ public class GzipRedisSerializer implements RedisSerializer<Object> {
             }
             return baos.toByteArray();
         } catch (IOException e) {
-            throw new SerializationException("Gzip 직렬화 실패: " + value.getClass().getName(), e);
+            throw new SerializationException("Gzip serialization failed: " + value.getClass().getName(), e);
         }
     }
 
@@ -56,7 +56,7 @@ public class GzipRedisSerializer implements RedisSerializer<Object> {
             byte[] jsonBytes = gzip.readAllBytes();
             return objectMapper.readValue(jsonBytes, Object.class);
         } catch (IOException e) {
-            throw new SerializationException("Gzip 역직렬화 실패", e);
+            throw new SerializationException("Gzip deserialization failed", e);
         }
     }
 }

@@ -21,7 +21,7 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
- * Chat room management service (Uses Spring Cache abstraction + Self-Injection)
+ * 채팅방 관리 서비스 (Spring Cache 추상화 + Self-Injection 사용)
  */
 @Service
 @RequiredArgsConstructor
@@ -40,7 +40,7 @@ public class RoomService {
 
     @PostConstruct
     public void init() {
-        // Observer pattern: Subscribe to session closed event
+        // Observer 패턴: 세션 종료 이벤트 구독
         com.socket.server.event.EventBus.getInstance().subscribe(event -> {
             if (event instanceof com.socket.server.event.SessionClosedEvent) {
                 handleSessionClosed((com.socket.server.event.SessionClosedEvent) event);
@@ -53,7 +53,7 @@ public class RoomService {
     }
 
     /**
-     * Create chat room and store in cache
+     * 채팅방 생성 및 캐시에 저장
      */
     @CachePut(value = "rooms", key = "#roomId")
     public ChatRoom createRoom(String roomId, String roomName) {
@@ -63,7 +63,7 @@ public class RoomService {
     }
 
     /**
-     * Get chat room information (cache first)
+     * 채팅방 정보 조회 (캐시 우선)
      */
     @Cacheable(value = "rooms", key = "#roomId")
     public Optional<ChatRoom> getRoom(String roomId) {
@@ -72,7 +72,7 @@ public class RoomService {
     }
 
     /**
-     * Handle room entry
+     * 방 입장 처리
      */
     @CachePut(value = "rooms", key = "#roomId")
     public ChatRoom joinRoom(String roomId, User user) {
@@ -88,7 +88,7 @@ public class RoomService {
     }
 
     /**
-     * Handle room exit
+     * 방 퇴장 처리
      */
     @CachePut(value = "rooms", key = "#roomId")
     public ChatRoom leaveRoom(String roomId, User user) {
@@ -101,14 +101,14 @@ public class RoomService {
     }
 
     /**
-     * Check if room exists
+     * 방 존재 여부 확인
      */
     public boolean existsRoom(String roomId) {
         return getSelf().getRoom(roomId).isPresent();
     }
 
     /**
-     * Broadcast message to all users in the room (using Redis Pub/Sub)
+     * 방의 모든 사용자에게 메시지 브로드캐스트 (Redis Pub/Sub 사용)
      */
     public void broadcast(String roomId, ChatMessage message) {
         log.info("[RoomService] Publishing message to Redis channel: roomId={}, messageType={}", roomId, message.getType());
@@ -116,7 +116,7 @@ public class RoomService {
     }
 
     /**
-     * Forward Redis messages issued from other servers or current server only to local clients (Asynchronous process)
+     * 다른 서버 또는 현재 서버에서 발행된 Redis 메시지를 로컬 클라이언트에만 전달 (비동기 처리)
      */
     public void broadcastLocal(String roomId, ChatMessage message) {
         getSelf().getRoom(roomId).ifPresent(room -> {
@@ -146,7 +146,7 @@ public class RoomService {
     }
 
     /**
-     * Send the list of current users in the chat room to all participants
+     * 채팅방의 현재 참가자 목록을 모든 참여자에게 전송
      */
     public void broadcastUserList(String roomId) {
         getSelf().getRoom(roomId).ifPresent(room -> {

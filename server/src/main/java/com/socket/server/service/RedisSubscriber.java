@@ -11,7 +11,7 @@ import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.stereotype.Service;
 
 /**
- * Redis Pub/Sub message subscription listener
+ * Redis Pub/Sub 메시지 구독 리스너
  */
 @Service
 @RequiredArgsConstructor
@@ -24,15 +24,15 @@ public class RedisSubscriber implements MessageListener {
     @Override
     public void onMessage(Message message, byte[] pattern) {
         try {
-            // Deserialize message received from Redis
+            // Redis로부터 수신된 메시지 역직렬화
             String body = new String(message.getBody());
             ChatMessage chatMessage = objectMapper.readValue(body, ChatMessage.class);
             
             log.info("[RedisSubscriber] Message received: roomId={}, senderId={}", 
                     chatMessage.getRoomId(), chatMessage.getSenderId());
 
-            // Broadcast only to local clients through RoomService
-            // Direct fetching from Context or lazy loading to prevent circular reference
+            // RoomService를 통해 로컬 클라이언트에만 브로드캐스트
+            // 순환 참조 방지를 위해 Context에서 직접 조회 또는 지연 로딩
             applicationContext.getBean(RoomService.class).broadcastLocal(chatMessage.getRoomId(), chatMessage);
             
         } catch (Exception e) {

@@ -22,12 +22,12 @@ public class SocketDispatcher {
     private final List<ChannelInterceptor> interceptors;
 
     /**
-     * Dispatches the received message to the appropriate controller method.
-     * 
-     * @param clientSocket Client socket (used in interceptors)
-     * @param messageType Message type
-     * @param payload JSON body data
-     * @return Controller execution result
+     * 수신된 메시지를 적절한 컨트롤러 메서드로 디스패치합니다.
+     *
+     * @param clientSocket 클라이언트 소켓 (인터셉터에서 사용)
+     * @param messageType  메시지 타입
+     * @param payload      JSON 바디 데이터
+     * @return 컨트롤러 실행 결과
      */
     public Object dispatch(Socket clientSocket, int messageType, byte[] payload) {
         // 1. Execute interceptor Pre-Handle
@@ -76,16 +76,16 @@ public class SocketDispatcher {
         for (int i = 0; i < parameters.length; i++) {
             Parameter parameter = parameters[i];
             
-            // If @com.socket.server.annotation.MessageBody annotation is present
+            // @com.socket.server.annotation.MessageBody 어노테이션이 있으면
             if (parameter.isAnnotationPresent(com.socket.server.annotation.MessageBody.class)) {
                 Class<?> targetType = parameter.getType();
-                // Convert payload to target class type using the serializer
+                // 직렬화기로 payload를 대상 클래스 타입으로 변환
                 args[i] = serializer.deserialize(payload, targetType);
             } else if (parameter.getType().equals(Socket.class)) {
-                // If parameter type is Socket, inject current client socket
+                // 파라미터 타입이 Socket이면 현재 클라이언트 소켓 주입
                 args[i] = clientSocket;
             } else {
-                // Handle as null if no annotation is present (can be extended)
+                // 어노테이션이 없으면 null 처리 (확장 가능)
                 args[i] = null;
             }
         }

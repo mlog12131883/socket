@@ -46,7 +46,7 @@ public class SocketServerService {
 
     @jakarta.annotation.PostConstruct
     public void init() {
-        // Create custom ThreadPoolExecutor (Worker)
+        // 커스텀 ThreadPoolExecutor (Worker) 생성
         this.workerExecutor = new ThreadPoolExecutor(
                 CORE_POOL_SIZE,
                 MAX_POOL_SIZE,
@@ -71,7 +71,7 @@ public class SocketServerService {
                         Socket clientSocket = serverSocket.accept();
                         log.info("Client connection accepted: {}", clientSocket.getInetAddress());
                         
-                        // Delegate actual processing to worker thread pool (Non-blocking Accept)
+                        // 실제 처리는 워커 스레드 풀에 위임 (논블로킹 Accept)
                         try {
                             workerExecutor.submit(() -> handleClient(clientSocket));
                         } catch (RejectedExecutionException e) {
@@ -95,29 +95,29 @@ public class SocketServerService {
         try (DataInputStream in = new DataInputStream(clientSocket.getInputStream());
              DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream())) {
 
-            // Register socket and output stream in SessionRegistry (ensures shared instance sharing)
+            // 소켓과 출력 스트림을 SessionRegistry에 등록 (공유 인스턴스 보장)
             sessionRegistry.addSocket(clientSocket, out);
 
-            // Connection persistence settings
-            clientSocket.setKeepAlive(true); // Enable TCP Keep-Alive
-            clientSocket.setSoTimeout(0);    // Set timeout to infinite
+            // 연결 유지 설정
+            clientSocket.setKeepAlive(true); // TCP Keep-Alive 활성화
+            clientSocket.setSoTimeout(0);    // 타임아웃 무한대 설정
 
             while (isRunning) {
                 try {
-                    // 1. Read header (Payload length) (4 bytes)
+                    // 1. 헤더 읽기 (페이로드 길이) (4 bytes)
                     int length = in.readInt();
                     
-                    // 2. Read header (Message type) (4 bytes)
+                    // 2. 헤더 읽기 (메시지 타입) (4 bytes)
                     int messageType = in.readInt();
 
-                    // 3. Read Body data
+                    // 3. 바디 데이터 읽기
                     byte[] payload = new byte[length];
                     in.readFully(payload);
 
-                    // 4. Routing and dynamic execution through Dispatcher (passing Socket)
+                    // 4. Dispatcher를 통한 라우팅 및 동적 실행 (Socket 전달)
                     Object response = dispatcher.dispatch(clientSocket, messageType, payload);
 
-                    // Echo response
+                    // 에코 응답
                     if (response != null) {
                         byte[] responsePayload = serializer.serialize((ChatMessage) response);
                         
@@ -129,10 +129,10 @@ public class SocketServerService {
                         }
                     }
                 } catch (java.io.EOFException | java.net.SocketException e) {
-                    // Connection disconnection exceptions are thrown to be handled in finally block
+                    // 연결 종료 예외는 finally 블록에서 처리되도록 상위로 전파
                     throw e;
                 } catch (Exception e) {
-                    // Business logic errors during individual message processing are logged, and connection is maintained
+                    // 개별 메시지 처리 중 비즈니스 로직 오류는 로그만 남기고 연결 유지
                     log.error("Error processing message (maintaining connection): {}", clientSocket.getInetAddress(), e);
                 }
             }
@@ -143,13 +143,13 @@ public class SocketServerService {
                 log.error("Client communication error (session terminated): {}", clientSocket.getInetAddress(), e);
             }
         } finally {
-            // Identify userId via SessionRegistry
+            // SessionRegistry를 통해 userId 식별
             String userId = sessionRegistry.getUserId(clientSocket).orElse(clientSocket.getInetAddress().toString());
             
-            // Observer Pattern: Publish session closed event
+            // Observer 패턴: 세션 종료 이벤트 발행
             EventBus.getInstance().publish(new SessionClosedEvent(userId));
             
-            // Remove session registration info
+            // 세션 등록 정보 제거
             sessionRegistry.unregisterBySocket(clientSocket);
             
             try {
@@ -179,7 +179,7 @@ public class SocketServerService {
         workerExecutor.shutdown();
 
         try {
-            // Wait for remaining tasks to complete
+            // 남은 작업이 완료될 때까지 대기
             if (!workerExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
                 log.warn("Worker thread pool did not terminate within 30 seconds, forcing shutdown.");
                 workerExecutor.shutdownNow();

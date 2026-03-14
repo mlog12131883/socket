@@ -9,7 +9,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Chat room domain class
+ * 채팅방 도메인 클래스
  */
 @Getter
 @NoArgsConstructor(force = true)
@@ -25,14 +25,14 @@ public class ChatRoom {
         this.activeUsers = ConcurrentHashMap.newKeySet();
     }
 
-    // Business method (Enter)
+    // 비즈니스 메서드 (입장)
     public void enter(User user) {
         if (user != null) {
             this.activeUsers.add(user);
         }
     }
 
-    // Business method (Leave)
+    // 비즈니스 메서드 (퇴장)
     public void leave(User user) {
         if (user != null) {
             this.activeUsers.remove(user);
@@ -40,7 +40,7 @@ public class ChatRoom {
     }
     
     /**
-     * Return defensive copy (or unmodifiable) to prevent external modification of the collection
+     * 외부에서 컬렉션을 직접 수정하지 못하도록 방어 복사본(또는 unmodifiable)을 반환
      */
     public Set<User> getActiveUsers() { 
         return Collections.unmodifiableSet(activeUsers); 

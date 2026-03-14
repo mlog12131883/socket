@@ -19,14 +19,14 @@ public class AuthenticationInterceptor implements ChannelInterceptor {
 
     @Override
     public boolean preHandle(Socket socket, int messageType, byte[] payload) {
-        // ENTER message is allowed even before authentication
+        // ENTER 메시지는 인증 이전에도 허용
         if (messageType == MessageType.ENTER.ordinal()) {
             return true;
         }
 
-        // Other messages check for session existence (or coordinate with state pattern)
-        // Checking only session existence here
-        // In practice, logic to check User.getState() could be added
+        // 이외 메시지는 세션 존재 여부 확인 (또는 상태 패턴과 조율)
+        // 여기서는 세션 존재 여부만 체크
+        // 실무에서는 User.getState() 확인 로직 추가 가능
         log.info("[Auth] Performing authentication check...");
         return true; 
     }

@@ -10,7 +10,7 @@ public class ConnectedState implements SessionState {
     @Override
     public void handle(User user, int messageType) {
         log.info("[State] Simple connected state (unauthenticated) - user: {}", user.getNickname());
-        // Can be designed so that transition is only possible on ENTER message
+        // ENTER 메시지에서만 전환이 가능하도록 설계 가능
     }
 
     @Override
