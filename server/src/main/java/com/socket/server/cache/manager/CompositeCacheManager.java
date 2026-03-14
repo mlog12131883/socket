@@ -3,6 +3,7 @@ package com.socket.server.cache.manager;
 import com.socket.server.cache.CacheGroup;
 import com.socket.server.cache.CacheType;
 import com.socket.server.cache.CompositeCache;
+import com.socket.server.cache.event.CacheInvalidationPublisher;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 
@@ -21,15 +22,20 @@ import java.util.*;
  */
 public class CompositeCacheManager implements CacheManager {
 
-    private final List<CacheManager>  managers;
-    private final UpdatableCacheManager l1Manager;
+    private final List<CacheManager>        managers;
+    private final UpdatableCacheManager      l1Manager;
+    private final CacheInvalidationPublisher publisher;
 
     /**
      * @param l1Manager L2 hit 시 L1 write-back에 사용될 UpdatableCacheManager
+     * @param publisher 분산 캐시 무효화 이벤트 발행자 (null이면 단일 서버 모드)
      * @param managers  순서 중요 – 첫 번째가 L1, 두 번째가 L2
      */
-    public CompositeCacheManager(UpdatableCacheManager l1Manager, List<CacheManager> managers) {
+    public CompositeCacheManager(UpdatableCacheManager l1Manager,
+                                 CacheInvalidationPublisher publisher,
+                                 List<CacheManager> managers) {
         this.l1Manager = l1Manager;
+        this.publisher = publisher;
         this.managers  = managers;
     }
 
@@ -45,7 +51,7 @@ public class CompositeCacheManager implements CacheManager {
                 Cache cache = manager.getCache(name);
                 if (cache != null) collected.add(cache);
             }
-            return collected.isEmpty() ? null : new CompositeCache(name, collected, l1Manager);
+            return collected.isEmpty() ? null : new CompositeCache(name, collected, l1Manager, publisher);
         }
 
         // LOCAL 또는 GLOBAL: 담당 매니저에서 직접 반환

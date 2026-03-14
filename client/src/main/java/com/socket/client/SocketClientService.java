@@ -19,6 +19,7 @@ import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.time.format.DateTimeFormatter;
+import java.nio.charset.StandardCharsets;
 
 @Service
 @RequiredArgsConstructor
@@ -101,7 +102,7 @@ public class SocketClientService {
 
     private void startConsoleInputLoop() {
         inputExecutor.submit(() -> {
-            java.util.Scanner scanner = new java.util.Scanner(System.in);
+            java.util.Scanner scanner = new java.util.Scanner(System.in, StandardCharsets.UTF_8);
             System.out.println("========================================");
             System.out.println("채팅 클라이언트 (ID: " + userId + ")");
             System.out.println("메시지를 입력하고 엔터를 누르세요. (종료: /quit)");

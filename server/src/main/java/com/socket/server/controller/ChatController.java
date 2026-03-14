@@ -40,7 +40,8 @@ public class ChatController {
         sessionRegistry.register(message.getSenderId(), clientSocket);
 
         // 2. Fetch or create chat room
-        ChatRoom room = roomService.getRoom(message.getRoomId())
+        // RoomService.getRoom()이 ChatRoom을 직접 리턴하므로 Optional.ofNullable()로 감쌉니다.
+        ChatRoom room = java.util.Optional.ofNullable(roomService.getRoom(message.getRoomId()))
                 .orElseGet(() -> roomService.createRoom(message.getRoomId(), "New Room " + message.getRoomId()));
 
         // 3. Enter chat room
@@ -68,7 +69,7 @@ public class ChatController {
     public void handleLeave(@MessageBody ChatMessage message) {
         log.info("[ChatController] Processing leave message: room [{}], user [{}]", message.getRoomId(), message.getSenderId());
         
-        sessionService.getSession(message.getSenderId()).ifPresent(user -> {
+        java.util.Optional.ofNullable(sessionService.getSession(message.getSenderId())).ifPresent(user -> {
             roomService.leaveRoom(message.getRoomId(), user);
             sessionService.removeSession(message.getSenderId());
             sessionRegistry.unregister(message.getSenderId());

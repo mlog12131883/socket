@@ -1,5 +1,6 @@
 package com.socket.server.cache;
 
+import com.socket.server.cache.event.CacheInvalidationPublisher;
 import com.socket.server.cache.manager.UpdatableCacheManager;
 import org.springframework.cache.Cache;
 import org.springframework.cache.support.SimpleValueWrapper;
@@ -22,19 +23,23 @@ import java.util.concurrent.Callable;
  */
 public class CompositeCache implements Cache {
 
-    private final String                  name;
-    private final List<Cache>             caches;          // index 0 = L1, index 1 = L2
-    private final UpdatableCacheManager   l1Manager;       // L1 write-back을 위한 참조
+    private final String                      name;
+    private final List<Cache>                 caches;      // index 0 = L1, index 1 = L2
+    private final UpdatableCacheManager       l1Manager;   // L1 write-back을 위한 참조
+    private final CacheInvalidationPublisher  publisher;   // 분산 캐시 무효화 발행 (null 허용)
 
     /**
      * @param name      캐시 이름
      * @param caches    순서가 중요 – 첫 번째가 L1(Local), 두 번째가 L2(Redis)
      * @param l1Manager L2 hit 시 L1에 putIfAbsent 하기 위한 UpdatableCacheManager
+     * @param publisher 분산 캐시 무효화 이벤트 발행자 (null이면 단일 서버 모드)
      */
-    public CompositeCache(String name, List<Cache> caches, UpdatableCacheManager l1Manager) {
+    public CompositeCache(String name, List<Cache> caches, UpdatableCacheManager l1Manager,
+                          CacheInvalidationPublisher publisher) {
         this.name      = name;
         this.caches    = caches;
         this.l1Manager = l1Manager;
+        this.publisher = publisher;
     }
 
     // -------------------------------------------------------------------------
@@ -89,17 +94,31 @@ public class CompositeCache implements Cache {
 
     @Override
     public void put(Object key, Object value) {
+        // L1, L2 모두 갱신
         caches.forEach(cache -> cache.put(key, value));
+        // 타 서버의 L1 캐시 무효화 이벤트 발행
+        if (publisher != null) {
+            publisher.publish(name, key);
+        }
     }
 
     @Override
     public void evict(Object key) {
+        // L1, L2 모두 삭제
         caches.forEach(cache -> cache.evict(key));
+        // 타 서버의 L1 캐시 무효화 이벤트 발행
+        if (publisher != null) {
+            publisher.publish(name, key);
+        }
     }
 
     @Override
     public void clear() {
         caches.forEach(Cache::clear);
+        // 타 서버의 L1 캐시 전체 무효화 이벤트 발행
+        if (publisher != null) {
+            publisher.publishClear(name);
+        }
     }
 
     // -------------------------------------------------------------------------

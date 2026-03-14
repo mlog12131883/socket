@@ -52,12 +52,15 @@ public class SessionService {
     }
 
     /**
-     * 세션 정보 조회
+     * 세션 정보 조회.
+     *
+     * <p>Optional 대신 직접 객체를 리턴하여 
+     * 직렬화 시 발생할 수 있는 잠재적 ClassCastException을 방지합니다.</p>
      */
     @Cacheable(value = "sessions", key = "#sessionId")
-    public Optional<User> getSession(String sessionId) {
+    public User getSession(String sessionId) {
         log.debug("Cache miss for session: {}", sessionId);
-        return Optional.empty();
+        return null;
     }
 
     /**
@@ -65,16 +68,17 @@ public class SessionService {
      */
     @CacheEvict(value = "sessions", key = "#sessionId")
     public void removeSession(String sessionId) {
-        getSelf().getSession(sessionId).ifPresent(user -> {
+        User user = getSelf().getSession(sessionId);
+        if (user != null) {
             log.info("Removing session and disconnecting user: sessionId={}, userId={}", sessionId, user.getId());
             user.disconnect();
-        });
+        }
     }
 
     /**
      * 세션 활성 여부 확인
      */
     public boolean isSessionActive(String sessionId) {
-        return getSelf().getSession(sessionId).isPresent();
+        return getSelf().getSession(sessionId) != null;
     }
 }

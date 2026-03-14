@@ -1,5 +1,6 @@
 package com.socket.server.config;
 
+import com.socket.server.cache.event.CacheInvalidationPublisher;
 import com.socket.server.cache.manager.CompositeCacheManager;
 import com.socket.server.cache.manager.LocalCacheManager;
 import com.socket.server.cache.manager.RedisCacheManager;
@@ -51,14 +52,17 @@ public class CacheConfig {
      * Spring Cache 추상화(@Cacheable 등)의 실제 진입점입니다.
      *
      * <p>CacheGroup 타입이 COMPOSITE인 캐시는 L1 + L2 를 모두 활용하며,
-     * L2 hit 시 자동으로 L1에 write-back됩니다.</p>
+     * L2 hit 시 자동으로 L1에 write-back됩니다.
+     * put/evict 시 {@link CacheInvalidationPublisher}를 통해 타 서버에 무효화 이벤트를 발행합니다.</p>
      */
     @Bean
     @Primary
     public CacheManager cacheManager(LocalCacheManager localCacheManager,
-                                     RedisCacheManager redisCacheManager) {
+                                     RedisCacheManager redisCacheManager,
+                                     CacheInvalidationPublisher cacheInvalidationPublisher) {
         return new CompositeCacheManager(
                 localCacheManager,
+                cacheInvalidationPublisher,
                 List.of(localCacheManager, redisCacheManager)
         );
     }

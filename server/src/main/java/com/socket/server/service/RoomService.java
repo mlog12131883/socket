@@ -63,12 +63,15 @@ public class RoomService {
     }
 
     /**
-     * 채팅방 정보 조회 (캐시 우선)
+     * 채팅방 정보 조회 (캐시 우선).
+     *
+     * <p>Optional 대신 직접 객체를 리턴하도록 변경하여 
+     * Spring Cache/Jackson 직렬화 시 발생할 수 있는 ClassCastException을 방지합니다.</p>
      */
     @Cacheable(value = "rooms", key = "#roomId")
-    public Optional<ChatRoom> getRoom(String roomId) {
+    public ChatRoom getRoom(String roomId) {
         log.debug("Cache miss for room: {}", roomId);
-        return Optional.empty();
+        return null; // 캐시 미스 시 null 반환 (DB 연동 시 여기서 로드)
     }
 
     /**
@@ -76,15 +79,16 @@ public class RoomService {
      */
     @CachePut(value = "rooms", key = "#roomId")
     public ChatRoom joinRoom(String roomId, User user) {
-        return getSelf().getRoom(roomId).map(room -> {
+        ChatRoom room = getSelf().getRoom(roomId);
+        if (room != null) {
             room.enter(user);
             log.info("User [{}] joined room [{}]", user.getId(), roomId);
             getSelf().broadcastUserList(roomId);
             return room;
-        }).orElseGet(() -> {
+        } else {
             log.warn("Room not found for join: {}", roomId);
             return null;
-        });
+        }
     }
 
     /**
@@ -92,19 +96,21 @@ public class RoomService {
      */
     @CachePut(value = "rooms", key = "#roomId")
     public ChatRoom leaveRoom(String roomId, User user) {
-        return getSelf().getRoom(roomId).map(room -> {
+        ChatRoom room = getSelf().getRoom(roomId);
+        if (room != null) {
             room.leave(user);
             log.info("User [{}] left room [{}]", user.getId(), roomId);
             getSelf().broadcastUserList(roomId);
             return room;
-        }).orElse(null);
+        }
+        return null;
     }
 
     /**
      * 방 존재 여부 확인
      */
     public boolean existsRoom(String roomId) {
-        return getSelf().getRoom(roomId).isPresent();
+        return getSelf().getRoom(roomId) != null;
     }
 
     /**
@@ -119,7 +125,8 @@ public class RoomService {
      * 다른 서버 또는 현재 서버에서 발행된 Redis 메시지를 로컬 클라이언트에만 전달 (비동기 처리)
      */
     public void broadcastLocal(String roomId, ChatMessage message) {
-        getSelf().getRoom(roomId).ifPresent(room -> {
+        ChatRoom room = getSelf().getRoom(roomId);
+        if (room != null) {
             log.info("[RoomService] Local broadcasting started: roomId={}, messageType={}, localActiveUsers={}", 
                     roomId, message.getType(), room.getActiveUsers().size());
             byte[] payload = serializer.serialize(message);
@@ -142,14 +149,15 @@ public class RoomService {
                     });
                 }
             }
-        });
+        }
     }
 
     /**
      * 채팅방의 현재 참가자 목록을 모든 참여자에게 전송
      */
     public void broadcastUserList(String roomId) {
-        getSelf().getRoom(roomId).ifPresent(room -> {
+        ChatRoom room = getSelf().getRoom(roomId);
+        if (room != null) {
             String userList = room.getActiveUsers().stream()
                     .map(User::getId)
                     .collect(Collectors.joining(","));
@@ -162,6 +170,6 @@ public class RoomService {
             );
             
             getSelf().broadcast(roomId, listMessage);
-        });
+        }
     }
 }
