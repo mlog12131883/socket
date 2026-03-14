@@ -1,38 +1,65 @@
 package com.socket.server.config;
 
-import com.github.benmanes.caffeine.cache.Caffeine;
+import com.socket.server.cache.manager.CompositeCacheManager;
+import com.socket.server.cache.manager.LocalCacheManager;
+import com.socket.server.cache.manager.RedisCacheManager;
+import com.socket.server.cache.manager.UpdatableCacheManager;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
-import org.springframework.cache.caffeine.CaffeineCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.data.redis.core.RedisTemplate;
 
-import java.util.Arrays;
-import java.util.concurrent.TimeUnit;
+import java.util.List;
 
+/**
+ * Composite Pattern 기반 2-Level Cache 설정.
+ *
+ * <pre>
+ * CompositeCacheManager  ← @Primary (Spring @Cacheable 연결점)
+ *   ├─ LocalCacheManager   (L1 Caffeine, UpdatableCacheManager 구현)
+ *   └─ RedisCacheManager   (L2 Redis)
+ * </pre>
+ *
+ * 새로운 캐시 추가는 {@link com.socket.server.cache.CacheGroup}에 항목만 추가하면 됩니다.
+ */
 @Configuration
 @EnableCaching
 public class CacheConfig {
 
+    /**
+     * L1 로컬 캐시 매니저 (Caffeine 기반).
+     * UpdatableCacheManager 구현체이므로 CompositeCache에서 write-back에 활용됩니다.
+     */
     @Bean
-    public CacheManager cacheManager() {
-        CaffeineCacheManager cacheManager = new CaffeineCacheManager();
-        cacheManager.setCacheNames(Arrays.asList("sessions", "rooms"));
-        
-        // sessions 캐시 설정
-        cacheManager.registerCustomCache("sessions", Caffeine.newBuilder()
-                .maximumSize(10000)
-                .expireAfterWrite(30, TimeUnit.MINUTES)
-                .recordStats()
-                .build());
-        
-        // rooms 캐시 설정
-        cacheManager.registerCustomCache("rooms", Caffeine.newBuilder()
-                .maximumSize(1000)
-                .expireAfterAccess(1, TimeUnit.HOURS)
-                .recordStats()
-                .build());
-        
-        return cacheManager;
+    public LocalCacheManager localCacheManager() {
+        return new LocalCacheManager();
+    }
+
+    /**
+     * L2 분산 캐시 매니저 (Redis 기반).
+     * GzipRedisSerializer가 적용된 RedisTemplate을 사용합니다.
+     */
+    @Bean
+    public RedisCacheManager redisCacheManager(RedisTemplate<String, Object> cacheRedisTemplate) {
+        return new RedisCacheManager(cacheRedisTemplate);
+    }
+
+    /**
+     * 최상위 복합 캐시 매니저.
+     * Spring Cache 추상화(@Cacheable 등)의 실제 진입점입니다.
+     *
+     * <p>CacheGroup 타입이 COMPOSITE인 캐시는 L1 + L2 를 모두 활용하며,
+     * L2 hit 시 자동으로 L1에 write-back됩니다.</p>
+     */
+    @Bean
+    @Primary
+    public CacheManager cacheManager(LocalCacheManager localCacheManager,
+                                     RedisCacheManager redisCacheManager) {
+        return new CompositeCacheManager(
+                localCacheManager,
+                List.of(localCacheManager, redisCacheManager)
+        );
     }
 }
