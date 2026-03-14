@@ -49,7 +49,6 @@ public class RedisConfig {
                 .build();
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
-        mapper.registerModule(new JavaTimeModule());
         mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         mapper.activateDefaultTyping(ptv, ObjectMapper.DefaultTyping.EVERYTHING);
         return mapper;

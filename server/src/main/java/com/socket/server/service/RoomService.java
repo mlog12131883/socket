@@ -13,6 +13,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import com.socket.server.lock.DistributedLock;
 
 import java.io.DataOutputStream;
 import java.util.Optional;
@@ -75,8 +76,13 @@ public class RoomService {
     }
 
     /**
-     * 방 입장 처리
+     * 방 입장 처리.
+     *
+     * <p>분산 락으로 보호되는 임계 구역 (Critical Section).
+     * 다중 서버 환경에서 동시에 입장 요청이 들어와도
+     * MAX_CAPACITY 초과 입장을 원천 차단합니다.</p>
      */
+    @DistributedLock(key = "'room:' + #roomId", waitTime = 5, leaseTime = 10)
     @CachePut(value = "rooms", key = "#roomId")
     public ChatRoom joinRoom(String roomId, User user) {
         ChatRoom room = getSelf().getRoom(roomId);

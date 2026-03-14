@@ -4,17 +4,25 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import com.socket.server.exception.RoomFullException;
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 채팅방 도메인 클래스
+ * 채팅방 도메인 클래스.
+ *
+ * <p>MAX_CAPACITY를 통해 수용 인원을 제한하며,
+ * 분산 환경에서의 초과 입장은 {@link com.socket.server.lock.DistributedLock}으로 방지합니다.</p>
  */
 @Getter
 @NoArgsConstructor(force = true)
 @AllArgsConstructor
 public class ChatRoom {
+
+    /** 채팅방 최대 수용 인원 */
+    public static final int MAX_CAPACITY = 100;
+
     private final String id;
     private final String name;
     private final Set<User> activeUsers;
@@ -25,11 +33,16 @@ public class ChatRoom {
         this.activeUsers = ConcurrentHashMap.newKeySet();
     }
 
-    // 비즈니스 메서드 (입장)
+    /**
+     * 채팅방 입장.
+     * 수용 인원 초과 시 RoomFullException을 던집니다.
+     */
     public void enter(User user) {
-        if (user != null) {
-            this.activeUsers.add(user);
+        if (user == null) return;
+        if (this.activeUsers.size() >= MAX_CAPACITY) {
+            throw new RoomFullException(this.id, MAX_CAPACITY);
         }
+        this.activeUsers.add(user);
     }
 
     // 비즈니스 메서드 (퇴장)
