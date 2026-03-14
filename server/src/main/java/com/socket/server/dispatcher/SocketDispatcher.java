@@ -30,7 +30,7 @@ public class SocketDispatcher {
      * @return 컨트롤러 실행 결과
      */
     public Object dispatch(Socket clientSocket, int messageType, byte[] payload) {
-        // 1. Execute interceptor Pre-Handle
+        // 1. 인터셉터 Pre-Handle 실행
         for (ChannelInterceptor interceptor : interceptors) {
             if (!interceptor.preHandle(clientSocket, messageType, payload)) {
                 log.warn("Request blocked by interceptor: {}", interceptor.getClass().getSimpleName());
