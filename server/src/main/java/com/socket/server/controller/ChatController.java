@@ -10,6 +10,7 @@ import com.socket.server.domain.ChatRoom;
 import com.socket.server.repository.SessionRegistry;
 import com.socket.server.service.SessionService;
 import com.socket.server.service.RoomService;
+import com.socket.server.service.ChatMessageWriteBehindService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +28,7 @@ public class ChatController {
     private final SessionService sessionService;
     private final RoomService roomService;
     private final SessionRegistry sessionRegistry;
+    private final ChatMessageWriteBehindService chatMessageWriteBehindService;
 
     @MessageMapping(MessageType.ENTER)
     public void handleEnter(@MessageBody ChatMessage message, Socket clientSocket) {
@@ -60,9 +62,12 @@ public class ChatController {
     public void handleChat(@MessageBody ChatMessage message) {
         log.info("[ChatController] Processing chat message: room [{}], user [{}], content [{}]", 
                 message.getRoomId(), message.getSenderId(), message.getContent());
-        
-        // Broadcasting: Forward message to everyone
+
+        // 1) 실시간 브로드캐스트
         roomService.broadcast(message.getRoomId(), message);
+
+        // 2) 비동기 Write-Behind 큐 적재
+        chatMessageWriteBehindService.enqueue(message);
     }
 
     @MessageMapping(MessageType.LEAVE)
